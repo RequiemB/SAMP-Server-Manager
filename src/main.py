@@ -11,7 +11,8 @@ import logging
 from samp_query import Client
 from helpers import (
     config,
-    log
+    log, 
+    utils
 )
 from pkgutil import iter_modules
 from dotenv import load_dotenv
@@ -50,7 +51,7 @@ class QueryBot(commands.Bot):
             else:
                 self.logger.info(f"Loaded extension {extension}.")
 
-        self.pool = asqlite.create_pool('./database/query.db')
+        await utils.set_up_database(self)
 
         # TODO: Add auto status updater
 

@@ -1,0 +1,2 @@
+class InvalidIP(Exception):
+    pass

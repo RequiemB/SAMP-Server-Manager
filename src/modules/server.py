@@ -4,6 +4,8 @@ from discord import app_commands
 
 import asqlite
 
+from helpers import utils as samp_util
+
 GUILD = discord.Object(id=980522617570213989)
 
 @app_commands.guilds(GUILD)
@@ -12,7 +14,6 @@ class Server(commands.GroupCog, name='server', description="All the server comma
         self.bot = bot
 
     @app_commands.command(name="get", description="Gets the information for the SA-MP server set in this guild.", extras={"cog": "Server"})
-    @app_commands.guilds(GUILD)
     async def server_get(self, interaction: discord.Interaction):
         ...
 
@@ -21,7 +22,6 @@ class Server(commands.GroupCog, name='server', description="All the server comma
         ip="The IP address of the SA-MP server.",
         port="The port of the SA-MP server."
     )
-    @app_commands.guilds(GUILD)
     async def server_set(self, interaction: discord.Interaction, ip: str, port: int):
         ...
 
@@ -29,7 +29,6 @@ class Server(commands.GroupCog, name='server', description="All the server comma
     @app_commands.describe(
         interval="The interval at which the info should be sent. Must be higher than 30s and lower than 30m. Example Usage: 1s for 1 second, 1m for 1 minute."
     )
-    @app_commands.guilds(GUILD)
     async def server_interval(self, interaction: discord.Interaction, interval: str):
         ...
 
