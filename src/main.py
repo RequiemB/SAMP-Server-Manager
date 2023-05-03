@@ -35,6 +35,7 @@ class QueryBot(commands.Bot):
             owner_ids = config.OWNER_IDS
         )
         self._extensions = [m.name for m in iter_modules(['modules'], prefix='modules.')]
+        self._extensions.append("jishaku")
         self.logger = logger
 
     async def on_ready(self):
@@ -53,7 +54,10 @@ class QueryBot(commands.Bot):
 
         await utils.set_up_database(self)
 
-        # TODO: Add auto status updater
+    async def on_app_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
+        traceback.print_exc()
+
+        # TODO: Add auto status updater 
 
 bot = QueryBot()
 
