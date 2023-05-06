@@ -54,8 +54,6 @@ class QueryBot(commands.Bot):
             else:
                 self.logger.info(f"Loaded extension {extension}.")
 
-        await utils.set_up_database(self)
-
 bot = QueryBot()
 
 load_dotenv()

@@ -57,8 +57,6 @@ class Overwrite(discord.ui.View):
 
         await self.message.edit(view=self)
 
-
-
 class Server(commands.GroupCog, name='server', description="All the server commands lie under this group."):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
@@ -66,6 +64,7 @@ class Server(commands.GroupCog, name='server', description="All the server comma
         self.ip = re.compile(ip_regex)
 
     async def cog_load(self):
+        await _utils.set_up_database(self.bot)
         await self._status.start_status_global()
 
     @app_commands.command(name="get", description="Gets the information for the SA-MP server set in this guild.", extras={"cog": "Server"})
