@@ -1,17 +1,23 @@
 import discord
-from discord.ext import commands
+from discord.ext import commands, tasks
 from discord import app_commands
 
 import asqlite
 import traceback
+import datetime
+import trio_asyncio
+import re
 
 from helpers import (
     utils as _utils,
-    config
+    config,
+    status as _status
 )
 
+ip_regex = "^((25[0-5]|(2[0-4]|1\d|[1-9]|)\d)\.){3}(25[0-5]|(2[0-4]|1\d|[1-9]|)\d)$"
+
 class Overwrite(discord.ui.View):
-    def __init__(self, interaction: discord.Interaction, ip, port):
+    def __init__(self, ip, port):
         super().__init__(timeout=60.0)
         self.message = None
         self.ip = ip
@@ -36,20 +42,31 @@ class Overwrite(discord.ui.View):
             color = discord.Color.green()
         )
         await interaction.response.send_message(embed=e)
+        await self._status.start_status_with_guild(interaction.guild)
+
         for button in self.children:
             button.disabled = True
         await self.message.edit(view=self)
 
     @discord.ui.button(label="Cancel", style=discord.ButtonStyle.red, emoji=config.reactionFailure)
     async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
-        await self.message.edit(content="Successfully cancelled the configuration.", view=None)
+        await interaction.response.send_message(content="Successfully cancelled the configuration.")
 
-GUILD = discord.Object(id=980522617570213989)
+        for button in self.children:
+            button.disabled = True
 
-@app_commands.guilds(GUILD)
+        await self.message.edit(view=self)
+
+
+
 class Server(commands.GroupCog, name='server', description="All the server commands lie under this group."):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
+        self._status = self.bot._status
+        self.ip = re.compile(ip_regex)
+
+    async def cog_load(self):
+        await self._status.start_status_global()
 
     @app_commands.command(name="get", description="Gets the information for the SA-MP server set in this guild.", extras={"cog": "Server"})
     async def server_get(self, interaction: discord.Interaction):
@@ -58,7 +75,7 @@ class Server(commands.GroupCog, name='server', description="All the server comma
         conn, cursor = await _utils.execute_query(query)
         data = await cursor.fetchall()
         if len(data) == 0:
-            command_mention = await _utils.format_command_mention_from_command(self.bot, "server", "set", GUILD)
+            command_mention = await _utils.format_command_mention_from_command(self.bot, "server", "set")
             e = discord.Embed(
                 description = f"{config.reactionFailure} No SA-MP server has been configured for this guild. Ask a manager to set one using the {command_mention} command.",
                 color = discord.Color.red()
@@ -76,9 +93,10 @@ class Server(commands.GroupCog, name='server', description="All the server comma
             color = discord.Color.blue(),
             timestamp = interaction.created_at
         )
+        e.add_field(name="IP Address", value=f"{ip}:{port}")
         e.add_field(name="Gamemode", value=info.gamemode)
         e.add_field(name="Players", value=f"{info.players}/{info.max_players}")
-        e.add_field(name="Latency", value=ping)
+        e.add_field(name="Latency", value="{:.2f}ms".format(ping))
         e.add_field(name="Password", value=info.password)
         e.add_field(name="Language", value=info.language)
         await interaction.followup.send(embed=e)
@@ -97,18 +115,29 @@ class Server(commands.GroupCog, name='server', description="All the server comma
             await interaction.response.send_message(embed=e)
             return
 
+        if not re.search(self.ip, ip):
+            e = discord.Embed(
+                description = f"{config.reactionFailure} The IP: {ip} is not a valid IP address.",
+                color = discord.Color.red()
+            )
+            await interaction.response.send_message(embed=e)
+            return
+
         query = f"SELECT * FROM query WHERE guild_id={interaction.guild.id}" 
         conn, cursor = await _utils.execute_query(query) 
-        data = await cursor.fetchall() 
-        is_server_set: bool = len(data) != 0
+        data = await cursor.fetchone() 
+        if data is not None:
+            is_server_set: bool = len(data) != 0
+        else:
+            is_server_set: bool = False
         if is_server_set:
             e = discord.Embed(
                 description = f"{config.reactionFailure} An SA-MP server is already configured for this guild. Do you wish to overwrite?",
                 color = discord.Color.red()
             )
-            view = Overwrite(interaction, ip, port)
+            view = Overwrite(ip, port)
             await interaction.response.send_message(embed=e, view=view)
-            view.message = await interaction.original_message()
+            view.message = await interaction.original_response()
         else:
             await _utils.configure_server_for_guild(interaction.guild, ip, port)
 
@@ -116,16 +145,132 @@ class Server(commands.GroupCog, name='server', description="All the server comma
                 description = f"{config.reactionSuccess} Successfully set the SA-MP server for this guild to **{ip}:{port}**.",
                 color = discord.Color.green()
             )
-            await interaction.followup.send(embed=e)
+
+            await self._status.start_status_with_guild(interaction.guild)
+
+            await interaction.response.send_message(embed=e)
 
         await conn.close()
+
+    @app_commands.command(name="channel", description="Sets the channel in which the bot updates the SA-MP server information.", extras={"cog": "Server"})
+    @app_commands.describe(
+        channel="The channel in which the bot should update the SA-MP server info.",
+        interval="The interval at which the info should be sent. Must be higher than 30s and lower than 30m. Example Usage: 1s for 1 second, 1m for 1 minute."
+    )
+    async def server_channel(self, interaction: discord.Interaction, channel: discord.TextChannel, interval: str = None):
+        if not interaction.user.guild_permissions.manage_guild:
+            e = discord.Embed(
+                description = f"{config.reactionFailure} You require the **Manage Guild** permission in order to execute this command.",
+                color = discord.Color.red()
+            )
+            await interaction.response.send_message(embed=e)
+            return
+
+        query = f"SELECT * FROM query where guild_id = {interaction.guild.id}"
+        conn, cursor = await _utils.execute_query(query)
+        data = await cursor.fetchone()
+        if data is None:
+            command_mention = await _utils.format_command_mention_from_command(interaction.client, "server", "set")
+
+            e = discord.Embed(
+                description = f"{config.reactionFailure} You must configure a SA-MP server for this guild using the {command_mention} command before setting a channel/an interval.",
+                color = discord.Color.red()
+            )
+
+            await interaction.response.send_message(embed=e)
+
+        duration: int
+        fraction: str
+        query: str
+        
+        if interval is not None:
+            duration, fraction = _utils.format_time(interval)
+            if duration == "" and fraction == "":
+                e = discord.Embed(description = f"{config.reactionFailure} Invalid time format specified. Time must be passed as `1s` for a second or `1m` for a minute.", color = discord.Color.red())
+                await interaction.response.send_message(embed=e)
+                return
+            elif duration == "error" and fraction == "":
+                e = discord.Embed(description = f"{config.reactionFailure} Invalid time format specified. The minimum value is `30s` and the maximum value is `30m`.", color = discord.Color.red())
+                await interaction.response.send_message(embed=e)
+                return
+            else:
+                query = f"UPDATE query SET INTERVAL = {duration}, FRACTION = '{fraction}', channel_id = {channel.id} WHERE guild_id = {interaction.guild.id}"
+        else:
+            query = f"UPDATE query SET channel_id = {channel.id} WHERE guild_id = {interaction.guild.id}"
+
+        assert query is not None
+
+        conn, cursor = await _utils.execute_query(query)
+        await conn.commit()
+
+        if interval is not None or data[3] is not None:
+            await self._status.start_status_with_guild(interaction.guild)
+
+        e = discord.Embed(color = discord.Color.green())
+        if interval is not None:
+            e.description = f"{config.reactionSuccess} Successfully set the SA-MP server status channel to {channel.mention} and the interval to `{interval}`."
+        else:
+            command_mention = await _utils.format_command_mention_from_command(interaction.client, "server", "interval")
+            e.description = f"{config.reactionSuccess} Successfully set the SA-MP server status channel to {channel.mention}. Use {command_mention} to set an interval."
+        
+        await conn.close()
+        await interaction.response.send_message(embed=e)
 
     @app_commands.command(name="interval", description="Sets the interval at which the info should be sent.", extras={"cog": "Server"})
     @app_commands.describe(
         interval="The interval at which the info should be sent. Must be higher than 30s and lower than 30m. Example Usage: 1s for 1 second, 1m for 1 minute."
     )
     async def server_interval(self, interaction: discord.Interaction, interval: str):
-        ...
+        if not interaction.user.guild_permissions.manage_guild:
+            e = discord.Embed(
+                description = f"{config.reactionFailure} You require the **Manage Guild** permission in order to execute this command.",
+                color = discord.Color.red()
+            )
+            await interaction.response.send_message(embed=e)
+            return
+
+        query = f"SELECT * FROM query where guild_id = {interaction.guild.id}"
+        conn, cursor = await _utils.execute_query(query)
+        data = await cursor.fetchone()
+        if data is None:
+            command_mention = await _utils.format_command_mention_from_command(interaction.client, "server", "set")
+
+            e = discord.Embed(
+                description = f"{config.reactionFailure} You must configure a SA-MP server for this guild using the {command_mention} command before setting an interval.",
+                color = discord.Color.red()
+            )
+
+            await interaction.response.send_message(embed=e)
+            return
+
+        duration, fraction = _utils.format_time(interval)
+        if duration == "" and fraction == "":
+            e = discord.Embed(description = f"{config.reactionFailure} Invalid time format specified. Time must be passed as `1s` for a second or `1m` for a minute.", color = discord.Color.red())
+            await interaction.response.send_message(embed=e)
+            return
+        elif duration == "error" and fraction == "":
+            e = discord.Embed(description = f"{config.reactionFailure} Invalid time format specified. The minimum value is `30s` and the maximum value is `30m`.", color = discord.Color.red())
+            await interaction.response.send_message(embed=e)
+            return
+
+        query = f"UPDATE query SET INTERVAL = {duration}, FRACTION = '{fraction}' WHERE guild_id = {interaction.guild.id}"
+        await cursor.execute(query)
+
+        await conn.commit()
+        await conn.close()
+
+        e = discord.Embed(
+            description = f"{config.reactionSuccess} Successfully set the interval for this guild to `{interval}`.",
+            color = discord.Color.green()
+        )
+
+        if data[5] is None:
+            command_mention = await _utils.format_command_mention_from_command(interaction.client, "server", "channel")
+            e.description += f"\n\n:warning: You must set a channel to send SA-MP server status using {command_mention}."
+        else:
+            await self._status.start_status_with_guild(interaction.guild)
+
+        await interaction.response.send_message(embed=e)
 
 async def setup(bot: commands.Bot):
     await bot.add_cog(Server(bot))

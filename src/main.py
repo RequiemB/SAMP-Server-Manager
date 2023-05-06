@@ -7,25 +7,26 @@ import traceback
 import asyncio
 import os
 import logging
+import trio
+import trio_asyncio
 
-from samp_query import Client
 from helpers import (
     config,
     log, 
-    utils
+    utils,
+    status
 )
 from pkgutil import iter_modules
 from dotenv import load_dotenv
 
-logger = logging.getLogger("QueryBot")
-logger.setLevel(logging.DEBUG)
+logger = logging.getLogger("discord")
+logger.setLevel(logging.INFO)
 logger.propagate = False
 
 handler = logging.StreamHandler()
-handler.setLevel(logging.DEBUG)
+handler.setLevel(logging.INFO)
 handler.setFormatter(log.Logger()) 
 logger.addHandler(handler)
-
 
 class QueryBot(commands.Bot):
     def __init__(self):
@@ -37,9 +38,10 @@ class QueryBot(commands.Bot):
         self._extensions = [m.name for m in iter_modules(['modules'], prefix='modules.')]
         self._extensions.append("jishaku")
         self.logger = logger
+        self._status = status.Status(self)
 
     async def on_ready(self):
-        print(f"Logged in as {self.user}.")
+        print(f"Logged in as {self.user}.", flush=True)
 
     async def setup_hook(self):
 
@@ -54,17 +56,26 @@ class QueryBot(commands.Bot):
 
         await utils.set_up_database(self)
 
-    async def on_app_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError):
-        traceback.print_exc()
-
-        # TODO: Add auto status updater 
-
 bot = QueryBot()
 
 load_dotenv()
 
-async def main():
+async def setup():
     async with bot:
         await bot.start(os.getenv('TOKEN'))
 
-asyncio.run(main())
+async def cleanup():
+    async with bot:
+        await bot.close()
+
+    bot.logger.info("Terminating all processes and stopping the loop...")
+
+    await asyncio.sleep(1)
+
+async def main():
+    try:
+        await trio_asyncio.aio_as_trio(setup)()
+    except KeyboardInterrupt:
+        await trio_asyncio.aio_as_trio(cleanup)()
+
+trio_asyncio.run(main)
