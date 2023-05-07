@@ -32,11 +32,10 @@ class QueryBot(commands.Bot):
     def __init__(self):
         super().__init__(
             command_prefix = config.PREFIX,
-            intents = discord.Intents.all(),
+            intents = discord.Intents.default(),
             owner_ids = config.OWNER_IDS
         )
         self._extensions = [m.name for m in iter_modules(['modules'], prefix='modules.')]
-        self._extensions.append("jishaku")
         self.logger = logger
         self._status = status.Status(self)
 
