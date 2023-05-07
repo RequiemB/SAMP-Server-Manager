@@ -66,6 +66,16 @@ class Server(commands.GroupCog, name='server', description="All the server comma
     async def cog_load(self):
         await _utils.set_up_database(self.bot)
         await self._status.start_status_global()
+        self.auto_sync.start()
+
+    @tasks.loop(count=1)
+    async def auto_sync(self):
+        await self.bot.tree.sync()
+        self.bot.logger.info("Synced all application commands globally.")
+
+    @auto_sync.before_loop
+    async def before_auto_sync():
+        await self.bot.wait_until_ready()
 
     @app_commands.command(name="get", description="Gets the information for the SA-MP server set in this guild.", extras={"cog": "Server"})
     async def server_get(self, interaction: discord.Interaction):
