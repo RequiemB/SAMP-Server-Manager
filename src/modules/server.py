@@ -17,11 +17,12 @@ from helpers import (
 ip_regex = "^((25[0-5]|(2[0-4]|1\d|[1-9]|)\d)\.){3}(25[0-5]|(2[0-4]|1\d|[1-9]|)\d)$"
 
 class Overwrite(discord.ui.View):
-    def __init__(self, ip, port):
+    def __init__(self, ip, port, data):
         super().__init__(timeout=60.0)
         self.message = None
         self.ip = ip
         self.port = port
+        self.data = data
 
     async def on_timeout(self):
         for button in self.children:
@@ -41,8 +42,22 @@ class Overwrite(discord.ui.View):
             description = f"{config.reactionSuccess} Successfully set the SA-MP server for this guild to **{self.ip}:{self.port}**.",
             color = discord.Color.green()
         )
+        try:
+            if self.data[5] is not None and self.data[3] is not None:
+                await self._status.start_status_with_guild(interaction.guild)
+            else:
+                server_channel = await _utils.format_command_mention_from_command(interaction.client, "server", "channel")
+                server_interval = await _utils.format_command_mention_from_command(interaction.client, "server", "interval")
+                if self.data[5] is None and self.data[3] is None:
+                     e.description += f"\n\n:warning: You must set a channel to post server status in using the {server_channel} command.\n:warning: You must set an interval to query server status using the {server_interval} command."
+                elif self.data[5] is None:
+                    e.description += f"\n\n:warning: You must set a channel to post server status in using the {command_mention} command."
+                elif self.data[3] is None:
+                    e.description += f"\n\n:warning: You must set an interval to query server status using the {server_interval} command."
+        except:
+            pass
+
         await interaction.response.send_message(embed=e)
-        await self._status.start_status_with_guild(interaction.guild)
 
         for button in self.children:
             button.disabled = True
@@ -74,7 +89,7 @@ class Server(commands.GroupCog, name='server', description="All the server comma
         self.bot.logger.info("Synced all application commands globally.")
 
     @auto_sync.before_loop
-    async def before_auto_sync():
+    async def before_auto_sync(self):
         await self.bot.wait_until_ready()
 
     @app_commands.command(name="get", description="Gets the information for the SA-MP server set in this guild.", extras={"cog": "Server"})
@@ -126,7 +141,7 @@ class Server(commands.GroupCog, name='server', description="All the server comma
 
         if not re.search(self.ip, ip):
             e = discord.Embed(
-                description = f"{config.reactionFailure} The IP: {ip} is not a valid IP address.",
+                description = f"{config.reactionFailure} The IP: **{ip}** is not a valid IP address.",
                 color = discord.Color.red()
             )
             await interaction.response.send_message(embed=e)
@@ -139,12 +154,13 @@ class Server(commands.GroupCog, name='server', description="All the server comma
             is_server_set: bool = len(data) != 0
         else:
             is_server_set: bool = False
+        await conn.close()
         if is_server_set:
             e = discord.Embed(
                 description = f"{config.reactionFailure} An SA-MP server is already configured for this guild. Do you wish to overwrite?",
                 color = discord.Color.red()
             )
-            view = Overwrite(ip, port)
+            view = Overwrite(ip, port, data)
             await interaction.response.send_message(embed=e, view=view)
             view.message = await interaction.original_response()
         else:
@@ -155,11 +171,22 @@ class Server(commands.GroupCog, name='server', description="All the server comma
                 color = discord.Color.green()
             )
 
-            await self._status.start_status_with_guild(interaction.guild)
+            try:
+                if self.data[5] is not None and self.data[3] is not None:
+                    await self._status.start_status_with_guild(interaction.guild)
+                else:
+                    server_channel = await _utils.format_command_mention_from_command(interaction.client, "server", "channel")
+                    server_interval = await _utils.format_command_mention_from_command(interaction.client, "server", "interval")
+                    if self.data[5] is None and self.data[3] is None:
+                         e.description += f"\n\n:warning: You must set a channel to post server status in using the {server_channel} command.\n:warning: You must set an interval to query server status using the {server_interval} command."
+                    elif self.data[5] is None:
+                        e.description += f"\n\n:warning: You must set a channel to post server status in using the {command_mention} command."
+                    elif self.data[3] is None:
+                        e.description += f"\n\n:warning: You must set an interval to query server status using the {server_interval} command."
+            except:
+                pass
 
             await interaction.response.send_message(embed=e)
-
-        await conn.close()
 
     @app_commands.command(name="channel", description="Sets the channel in which the bot updates the SA-MP server information.", extras={"cog": "Server"})
     @app_commands.describe(
