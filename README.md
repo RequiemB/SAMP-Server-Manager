@@ -2,15 +2,15 @@
 
 A Discord Bot to get SA-MP server information and send RCON commands written in Python. (RCON Commands are not implemented at the moment because the library [samp_query](https://github.com/Cheaterman/samp-query) doesn't support them yet.)
 
-![image](https://img.shields.io/badge/discord.py-2.2.3-blue.svg) ![image](https://img.shields.io/badge/Python-3.8-blue.svg)
+![image](https://img.shields.io/badge/discord.py-2.2.3-blue.svg) ![image](https://img.shields.io/badge/Python-3.10-blue.svg)
 
 ## Self-Hosted Instance
 
 To run the bot yourself, you need to do the following steps:
 
-* Step 1: Creating a Bot
-* Step 2: Configuring the Bot
-* Step 3: Running the Bot
+* Step 1: [Creating a Bot](https://github.com/RequiemB/SAMP-Server-Manager#creating-a-bot)
+* Step 2: [Configuring the Bot](https://github.com/RequiemB/SAMP-Server-Manager#configuring-the-bot)
+* Step 3: [Running the Bot](https://github.com/RequiemB/SAMP-Server-Manager#running-the-bot)
 
 ## Creating a Bot
 
@@ -23,9 +23,7 @@ In order to host your own instance of the bot, you have to create a Bot account.
 
 * Give it a description and set an avatar if you'd like. (The description will show up in your Bot's About Me.)
 
-* Click on Bot in the Settings on the left side.
-
-* Click on Add Bot and when a popup comes, click on Yes, do it!
+* Click on Bot in the Settings on the left side and proceed.
 
 * Give the Bot a name and set an avatar if you'd like. Congratulations, you've successfully made a bot.
 
