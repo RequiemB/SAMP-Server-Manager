@@ -106,15 +106,18 @@ class Config(discord.ui.View):
         self._channel = False
         super().__init__(timeout=300.0)
 
-    @discord.ui.button(style=discord.ButtonStyle.green, label="Set Server", emoji="<:au:981890460513620060>")
+    async def interaction_check(self, interaction: discord.Interaction) -> bool:
+        return interaction.user.guild_permissions.manage_guild
+
+    @discord.ui.button(style=discord.ButtonStyle.green, label="Set Server")
     async def server(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_modal(ServerModal(self, self.message, self.embed))
 
-    @discord.ui.button(style=discord.ButtonStyle.green, label="Set Interval", emoji="<:au:981890460513620060>")
+    @discord.ui.button(style=discord.ButtonStyle.green, label="Set Interval")
     async def interval(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_modal(IntervalModal(self, self.message, self.embed))
 
-    @discord.ui.button(style=discord.ButtonStyle.green, label="Set Channel", emoji="<:au:981890460513620060>")
+    @discord.ui.button(style=discord.ButtonStyle.green, label="Set Channel")
     async def channel(self, interaction: discord.Interaction, button: discord.ui.Button):
         e = discord.Embed(
             description = ":keyboard: Mention the channel to send the SA-MP status updates in this chat.\n:watch: This message will timeout in 30 seconds.",
@@ -150,7 +153,7 @@ class Config(discord.ui.View):
             await conn.commit()
             await conn.close()
 
-            e.description = f"{config.reactionSuccess} Successfully set the auto status updater channel to {channel.mention}."
+            e.description = f"{config.reactionSuccess} Set the auto status updater channel to {channel.mention}."
             await interaction.edit_original_response(embed=e)
 
             self.children[2].disabled = True
@@ -165,7 +168,6 @@ class Config(discord.ui.View):
 
             if self._server and self._interval:
                 await self._status.start_status_with_guild(interaction.guild)
-
 
 class Events(commands.Cog):
     def __init__(self, bot: commands.Bot):
