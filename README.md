@@ -2,9 +2,13 @@
 
 A Discord Bot to get SA-MP server information and send RCON commands written in Python. (RCON Commands are not implemented at the moment because the library [samp_query](https://github.com/Cheaterman/samp-query) doesn't support them yet.)
 
+You can use the [invite link](https://discord.com/api/oauth2/authorize?client_id=740603763118702662&permissions=414464723008&scope=bot%20applications.commands) to invite the bot to your server.
+
 ![image](https://img.shields.io/badge/discord.py-2.2.3-blue.svg) ![image](https://img.shields.io/badge/Python-3.10-blue.svg)
 
 ## Self-Hosted Instance
+
+If you can't figure out how to host your own instance, you can invite my hosted bot to your server using the [invite link](https://discord.com/api/oauth2/authorize?client_id=740603763118702662&permissions=414464723008&scope=bot%20applications.commands).
 
 To run the bot yourself, you need to do the following steps:
 
