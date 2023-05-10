@@ -4,9 +4,11 @@ import discord
 
 import asyncio
 import asqlite
+import re
 import trio
 import trio_asyncio
 
+ip_regex = '^([0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}:[0-9]{1,4})(:[0-9]{1,4})?$'
 
 def is_ip(address: str):
     ip = re.compile(ip_regex)
@@ -37,8 +39,8 @@ async def set_up_database(bot):
         if table is None:
             query = """CREATE TABLE query (
                 guild_id INT NOT NULL,
-                IP CHAR(45) NOT NULL,
-                PORT INT NOT NULL,
+                IP CHAR(45),
+                PORT INT,
                 INTERVAL INT,
                 FRACTION CHAR(6),
                 channel_id INT
@@ -82,10 +84,10 @@ async def execute_query(query: str):
     
     return conn, cursor
 
-async def configure_server_for_guild(guild, ip, port):
+async def add_guild(guild):
     conn = await asqlite.connect('./database/query.db')
     cursor = await conn.cursor()
-    await cursor.execute("INSERT INTO query(guild_id, IP, PORT) VALUES (?, ?, ?)", (guild.id, ip, port))
+    await cursor.execute("INSERT INTO query(guild_id) VALUES (?)", (guild.id))
     await conn.commit()
     await conn.close()
 

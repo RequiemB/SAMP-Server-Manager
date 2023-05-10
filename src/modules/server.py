@@ -164,7 +164,7 @@ class Server(commands.GroupCog, name='server', description="All the server comma
             await interaction.response.send_message(embed=e, view=view)
             view.message = await interaction.original_response()
         else:
-            await _utils.configure_server_for_guild(interaction.guild, ip, port)
+            await _utils.update_server_for_guild(interaction.guild, ip, port)
 
             e = discord.Embed(
                 description = f"{config.reactionSuccess} Successfully set the SA-MP server for this guild to **{ip}:{port}**.",

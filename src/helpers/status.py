@@ -56,7 +56,7 @@ class Status:
             ip = data[1]
         
         if data[2] is not None:
-            port = data[2]
+            port = int(data[2])
 
         if data[3] is not None:
             interval = data[3]
@@ -65,7 +65,7 @@ class Status:
             fraction = data[4]
 
         if data[5] is not None:
-            channel_id = data[5]
+            channel_id = int(data[5])
 
         return guild_id, ip, port, interval, fraction, channel_id
 
@@ -85,7 +85,6 @@ class Status:
             @get_status.before_loop
             async def before_get_status():
                 await self.bot.wait_until_ready()
-                self.bot.logger.warning(f"Cache is ready. Starting the auto-status updater task in guild {guild_id}.")
 
             if (ip is not None and port is not None and interval is not None and channel_id is not None):
                 self.tasks[guild_id] = get_status
