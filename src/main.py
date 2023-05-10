@@ -33,7 +33,9 @@ class QueryBot(commands.Bot):
         super().__init__(
             command_prefix = config.PREFIX,
             intents = discord.Intents.default(),
-            owner_ids = config.OWNER_IDS
+            owner_ids = config.OWNER_IDS,
+            status=discord.Status.dnd, 
+            activity=discord.Activity(name="your SAMP server", type=discord.ActivityType.watching)
         )
         self._extensions = [m.name for m in iter_modules(['modules'], prefix='modules.')]
         self._extensions.append("jishaku")
