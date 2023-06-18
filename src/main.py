@@ -32,15 +32,16 @@ class QueryBot(commands.Bot):
     def __init__(self):
         super().__init__(
             command_prefix = config.PREFIX,
-            intents = discord.Intents.default(),
+            intents = discord.Intents.all(),
             owner_ids = config.OWNER_IDS,
             status=discord.Status.dnd, 
-            activity=discord.Activity(name="your SAMP server", type=discord.ActivityType.watching)
+            activity=discord.Activity(name="your SAMP server", type=discord.ActivityType.watching),
         )
         self._extensions = [m.name for m in iter_modules(['modules'], prefix='modules.')]
         self._extensions.append("jishaku")
         self.logger = logger
         self._status = status.Status(self)
+        self.rcon_logged = {}
 
     async def on_ready(self):
         print(f"Logged in as {self.user}.", flush=True)
