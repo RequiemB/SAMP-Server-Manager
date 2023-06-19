@@ -32,7 +32,7 @@ class QueryBot(commands.Bot):
     def __init__(self):
         super().__init__(
             command_prefix = config.PREFIX,
-            intents = discord.Intents.all(),
+            intents = discord.Intents.default(),
             owner_ids = config.OWNER_IDS,
             status=discord.Status.dnd, 
             activity=discord.Activity(name="your SAMP server", type=discord.ActivityType.watching),

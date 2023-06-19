@@ -109,15 +109,15 @@ class Config(discord.ui.View):
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         return interaction.user.guild_permissions.manage_guild
 
-    @discord.ui.button(style=discord.ButtonStyle.green, label="Set Server")
+    @discord.ui.button(style=discord.ButtonStyle.green, label="Set Server", emoji="<:au:981890460513620060>")
     async def server(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_modal(ServerModal(self, self.message, self.embed))
 
-    @discord.ui.button(style=discord.ButtonStyle.green, label="Set Interval")
+    @discord.ui.button(style=discord.ButtonStyle.green, label="Set Interval", emoji="<:au:981890460513620060>")
     async def interval(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_modal(IntervalModal(self, self.message, self.embed))
 
-    @discord.ui.button(style=discord.ButtonStyle.green, label="Set Channel")
+    @discord.ui.button(style=discord.ButtonStyle.green, label="Set Channel", emoji="<:au:981890460513620060>")
     async def channel(self, interaction: discord.Interaction, button: discord.ui.Button):
         e = discord.Embed(
             description = ":keyboard: Mention the channel to send the SA-MP status updates in this chat.\n:watch: This message will timeout in 30 seconds.",

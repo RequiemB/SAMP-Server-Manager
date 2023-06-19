@@ -87,7 +87,7 @@ async def execute_query(query: str):
 async def add_guild(guild):
     conn = await asqlite.connect('./database/query.db')
     cursor = await conn.cursor()
-    await cursor.execute("INSERT INTO query (guild_id, IP, PORT, INTERVAL, FRACTION, channel_id) VALUES (?)", (guild.id))
+    await cursor.execute("INSERT INTO query (guild_id) VALUES (?)", (guild.id))
     await conn.commit()
     await conn.close()
 

@@ -35,14 +35,6 @@ class RCON(commands.GroupCog, name="rcon", description="All the RCON commands li
             self.bot.rcon_logged[guild_id] = []
             self.bot.rcon_logged[guild_id].append(user_id)
 
-    @staticmethod
-    def rcon_check():
-        async def _rcon_check(interaction: discord.Interaction):
-            # TODO: add rcon check
-            return True
-
-        return app_commands.check(_rcon_check)
-
     def is_logged_in(self, guild_id: int, user_id: int):
         try:
             return user_id in self.rcon_logged[guild_id]
@@ -54,7 +46,6 @@ class RCON(commands.GroupCog, name="rcon", description="All the RCON commands li
         pass
 
     @app_commands.command(name="login", description="Logs into the RCON of the SA-MP server set in the guild.")
-    @rcon_check()
     async def rcon_login(self, interaction: discord.Interaction):
         conn = await asqlite.connect("./database/query.db")
         cursor = await conn.cursor()
@@ -68,7 +59,7 @@ class RCON(commands.GroupCog, name="rcon", description="All the RCON commands li
             await conn.close()
             return
 
-        if is_logged_in(interaction.guild.id, interaction.user.id):
+        if self.is_logged_in(interaction.guild.id, interaction.user.id):
             e = discord.Embed(description=":floppy_disk: You're already logged in to RCON.", color=discord.Color.red())
             await interaction.response.send_message(embed=e, ephemeral=True)
             await conn.close()

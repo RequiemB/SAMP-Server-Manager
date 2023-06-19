@@ -98,7 +98,7 @@ class Server(commands.GroupCog, name='server', description="All the server comma
         query = f"SELECT * FROM query WHERE guild_id={interaction.guild.id}"
         conn, cursor = await _utils.execute_query(query)
         data = await cursor.fetchall()
-        if len(data) == 0:
+        if len(data[0][1]) == 0:
             command_mention = await _utils.format_command_mention_from_command(self.bot, "server", "set")
             e = discord.Embed(
                 description = f"{config.reactionFailure} No SA-MP server has been configured for this guild. Ask a manager to set one using the {command_mention} command.",
