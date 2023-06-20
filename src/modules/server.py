@@ -77,6 +77,7 @@ class Server(commands.GroupCog, name='server', description="All the server comma
         self.bot = bot
         self._status = self.bot._status
         self.ip = re.compile(ip_regex)
+        self.query = self.bot.query
 
     async def cog_load(self):
         await _utils.set_up_database(self.bot)
@@ -110,7 +111,8 @@ class Server(commands.GroupCog, name='server', description="All the server comma
 
         ip = data[0][1]
         port = int(data[0][2])
-        ping, info = await _utils.get_server_info(ip, port)
+        data = await self.query.get_server_data(ip, port)
+        info = data["info"]
         e = discord.Embed(
             title = info.name,
             description = f"Basic information of {info.name}:",
@@ -120,8 +122,8 @@ class Server(commands.GroupCog, name='server', description="All the server comma
         e.add_field(name="IP Address", value=f"{ip}:{port}")
         e.add_field(name="Gamemode", value=info.gamemode)
         e.add_field(name="Players", value=f"{info.players}/{info.max_players}")
-        e.add_field(name="Latency", value="{:.2f}ms".format(ping))
-        e.add_field(name="Password", value=info.password)
+        e.add_field(name="Latency", value=f"{data["ping"] * 1000:.0f}ms".)
+        e.add_field(name="OpenMP Client", value=data["is_omp"])
         e.add_field(name="Language", value=info.language)
         await interaction.followup.send(embed=e)
 

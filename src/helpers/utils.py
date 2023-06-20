@@ -1,5 +1,3 @@
-from samp_query import Client
-
 import discord
 
 import asyncio
@@ -13,20 +11,6 @@ ip_regex = '^([0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}:[0-9]{1,4})(:[0-9]{
 def is_ip(address: str):
     ip = re.compile(ip_regex)
     return re.search(ip, address)
-
-async def _get_server_info(ip: str, port: int):
-
-    server = Client(ip, int(port))
-
-    assert server is not None
-
-    ping = await server.ping()
-    info = await server.info()
-
-    return ping, info
-
-async def get_server_info(ip: str, port: int):
-    return await trio_asyncio.trio_as_aio(_get_server_info)(ip, port)
 
 async def set_up_database(bot):
     conn = await asqlite.connect('./database/query.db')
