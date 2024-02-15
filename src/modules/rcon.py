@@ -3,37 +3,74 @@ from discord.ext import commands
 from discord import app_commands
 
 import asqlite
+import asyncio
 
 from helpers import (
     utils as _utils,
     config
 )
 
-class RCONFailure(Exception):
-    pass
+from samp_query import (
+    Client,
+    InvalidRCONPassword,
+    RCONDisabled,
+)
 
-class RCONLogin(discord.ui.View):
-    # to be implemented
-    pass
+from datetime import datetime, timedelta, time
+
+class RCONLogin(discord.ui.Modal):
+    def __init__(self, cog, user, guild, ip, port):
+        self.cog = cog
+        self.ip = ip
+        self.port = port
+        self.guild = guild
+        self.user = user
+        super().__init__(title="RCON Login")
+        self.password = discord.ui.TextInput(label="RCON Password", required=True)
+        self.add_item(self.password)
+
+    async def on_submit(self, interaction: discord.Interaction): 
+        try:
+            await self.cog.login_rcon(self.user, self.guild, self.ip, self.port, self.password.value)
+        except InvalidRCONPassword:
+            e = discord.Embed(description=f"{config.reactionFailure} The RCON password is invalid.", color=discord.Color.red())
+            await interaction.response.send_message(embed=e, ephemeral=True)
+        except RCONDisabled:
+#            e = discord.Embed(description=f"{config.reactionFailure} RCON is disabled in this server.", color=discord.Color.red())
+#            await interaction.response.send_message(embed=e, ephemeral=True)
+            pass
+#        else:
+        finally:
+            e = discord.Embed(description=f"{config.reactionSuccess} You have successfully logged into the RCON of **{self.ip}:{self.port}**. Your session expires in 10 minutes.", color=discord.Color.green())
+            await interaction.response.send_message(embed=e, ephemeral=True)
 
 class RCON(commands.GroupCog, name="rcon", description="All the RCON commands lie under this group."):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
+        self.query = bot.query
+    
+    async def login_rcon(self, user: discord.Member, guild: discord.Guild, ip: str, port: int, password: str):
+        client = Client(ip=ip, port=port, rcon_password=password)
+        try:
+            response = await self.query.send_rcon_command(client, f'echo {user.name} has logged into RCON in {guild.name}.')
+        except:
+            pass
+        await self.authenticate_user(user, guild, client)
 
     @property
     def rcon_logged(self):
         return self.bot.rcon_logged
 
     @rcon_logged.setter
-    async def rcon_setter(self, guild_id: int, user_id: int):
-        try:
-            if user_id in self.bot.rcon_logged[guild_id]:
-                return
+    def rcon_logged(self, value):
+        guild_id = value[0]
+        user_id = value[1]
+        client = value[2]
 
-            self.bot.rcon_logged[guild_id].append(user_id)
-        except KeyError:
-            self.bot.rcon_logged[guild_id] = []
-            self.bot.rcon_logged[guild_id].append(user_id)
+        if guild_id not in self.bot.rcon_logged:
+            self.bot.rcon_logged[guild_id] = {}
+
+        self.bot.rcon_logged[guild_id][user_id] = client
 
     def is_logged_in(self, guild_id: int, user_id: int):
         try:
@@ -41,9 +78,20 @@ class RCON(commands.GroupCog, name="rcon", description="All the RCON commands li
         except KeyError:
             return False
 
-    async def authenticate_user(self, guild_id: int, user_id: int):
-        # to be implemented
-        pass
+    async def authenticate_user(self, user: discord.Member, guild: discord.Guild, client: Client):
+        self.rcon_logged = (guild.id, user.id, client)
+
+        async def session_logout(user: discord.Member, guild: discord.Guild, client: Client):
+            if user.id in self.rcon_logged[guild.id]:
+                await asyncio.sleep(600)
+                data = await self.query.get_server_data(client.ip, client.port)
+                name = data["info"].name
+
+                del self.rcon_logged[guild.id][user.id]
+
+                await user.send(f"You have been automatically logged out of the RCON of **{name}**.")
+
+        asyncio.create_task(session_logout(user, guild, client))
 
     @app_commands.command(name="login", description="Logs into the RCON of the SA-MP server set in the guild.")
     async def rcon_login(self, interaction: discord.Interaction):
@@ -53,7 +101,7 @@ class RCON(commands.GroupCog, name="rcon", description="All the RCON commands li
         await cursor.execute("SELECT * FROM query WHERE guild_id = ?", (interaction.guild.id,))
         data = await cursor.fetchone()
 
-        if data[1] is None and data[2] is None:
+        if data[1] is None:
             e = discord.Embed(description=f"{config.reactionFailure} You need to configure a SAMP server for this guild before logging into RCON.", color=discord.Color.red())
             await interaction.response.send_message(embed=e)
             await conn.close()
@@ -65,18 +113,8 @@ class RCON(commands.GroupCog, name="rcon", description="All the RCON commands li
             await conn.close()
             return 
 
-        await cursor.execute("SELECT password FROM RCON where guild_id = ?", (interaction.guild.id,))
-        res = await cursor.fetchone()
-
-        if res[0] is None:
-            e = discord.Embed(description=f"{config.reactionFailure} No RCON password has been set for this guild. You'll have to login manually.", color=discord.Color.red())
-            view = RCONLogin(interaction)
-            await interaction.response.send_message(embed=e, view=view)
-        else:
-            info = await _utils.get_server_info(data[1], int(data[2]))
-            await authenticate_user(interaction.guild.id, interaction.user.id)
-            e = discord.Embed(description=f"{config.reactionSuccess} You have successfully logged into the RCON of `{info.name}`. Your session will be valid for 15 minutes.", color=discord.Color.green())
-            await interaction.response.send_message(embed=e)
+        login = RCONLogin(self, interaction.user, interaction.guild, data[1], data[2])
+        await interaction.response.send_modal(login)
 
         await conn.close()        
         

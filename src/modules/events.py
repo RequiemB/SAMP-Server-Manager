@@ -30,7 +30,19 @@ class ServerModal(discord.ui.Modal):
 
         addr = self.ip.value.split(":")
 
-        await _utils.update_server_for_guild(interaction.guild, addr[0], addr[1])
+        try:
+            addr[1]
+        except IndexError:
+            e = discord.Embed(
+                description = f"{config.reactionFailure} The IP: **{self.ip.value}** is not a valid IP address.",
+                color = discord.Color.red()
+            )
+            await interaction.response.send_message(embed=e, ephemeral=True)
+            return
+
+        async with interaction.client.pool.acquire() as conn:
+            await conn.execute("UPDATE query SET IP = ?, PORT = ? WHERE guild_id = ?", (addr[0], addr[1], interaction.guild.id,))
+            await conn.commit()
 
         e = discord.Embed(
             description = f"{config.reactionSuccess} Successfully set the SA-MP server for this guild to **{addr[0]}:{addr[1]}**.",
@@ -71,11 +83,9 @@ class IntervalModal(discord.ui.Modal):
             await interaction.response.send_message(embed=e)
             return
 
-        query = f"UPDATE query SET INTERVAL = {duration}, FRACTION = '{fraction}' WHERE guild_id = {interaction.guild.id}"
-        conn, cursor = await _utils.execute_query(query)
-
-        await conn.commit()
-        await conn.close()
+        async with interaction.client.pool.acquire() as conn:
+            await conn.execute("UPDATE query SET INTERVAL = ? WHERE guild_id = ?", (duration, interaction.guild.id,))
+            await conn.commit()
 
         e = discord.Embed(
             description = f"{config.reactionSuccess} Successfully set the interval for this guild to `{self.interval.value}`.",
@@ -144,14 +154,12 @@ class Config(discord.ui.View):
                 
                 if channel is None:
                     e.description = f"{config.reactionFailure} An error occured while attempting to fetch the channel. Try again and if the issue still persists, try another channel and make sure I have permissions to view it."
-                    await interaction.followup.send(embed=e)
+                    await interaction.followup.send(embed=e, ephemeral=True)
                     return
                     
-            query = f"UPDATE query SET channel_id = {_id} WHERE guild_id = {interaction.guild.id}"
-            conn, cursor = await _utils.execute_query(query)
-
-            await conn.commit()
-            await conn.close()
+            async with interaction.client.pool.acquire() as conn:
+                await conn.execute("UPDATE query SET channel_id = ? WHERE guild_id = ?", (_id, interaction.guild.id,))
+                await conn.commit()
 
             e.description = f"{config.reactionSuccess} Set the auto status updater channel to {channel.mention}."
             await interaction.edit_original_response(embed=e)
@@ -174,9 +182,32 @@ class Events(commands.Cog):
         self.bot = bot
         self.status = bot._status
 
+    @commands.command()
+    async def lololol(self, ctx):
+        e = discord.Embed(
+            title = self.bot.user.name,
+            description = "Thanks for inviting me to this guild! You can now get information about your SA-MP server and even set a channel to send the information in a given interval.\n\nYou need to do some basic configuration to access all the bot's features. They are listed below.\nYou can set them now by using the buttons. It's recommended to configure it now.",
+            color = discord.Color.blue(),
+            timestamp = datetime.now()
+        )
+
+        e.add_field(name="Server", value=f"{config.reactionFailure} Not Configured")
+        e.add_field(name="Interval", value=f"{config.reactionFailure} Not Configured")
+        e.add_field(name="Channel", value=f"{config.reactionFailure} Not Configured")
+
+        e.set_footer(text="Made by requiem.b", icon_url="https://cdn.discordapp.com/avatars/680416522245636183/08d6f631895d23878a8028e110262a8d.png?size=1024")
+
+        view = Config(self.status, e)
+        try:
+            view.message = await ctx.channel.send(embed=e, view=view)
+        except:
+            pass
+
     @commands.Cog.listener()
     async def on_guild_join(self, guild: discord.Guild):
-        await _utils.add_guild(guild)
+        async with self.bot.pool.acquire() as conn:
+            await conn.execute("INSERT INTO query (guild_id) VALUES (?)", (guild.id,))
+            await conn.commit()
 
         if guild.system_channel is not None:
             channel = guild.system_channel
@@ -199,15 +230,20 @@ class Events(commands.Cog):
         e.add_field(name="Interval", value=f"{config.reactionFailure} Not Configured")
         e.add_field(name="Channel", value=f"{config.reactionFailure} Not Configured")
 
+        e.set_footer(text="Made by requiem.b", icon_url="https://cdn.discordapp.com/avatars/680416522245636183/08d6f631895d23878a8028e110262a8d.png?size=1024")
+
         view = Config(self.status, e)
-        view.message = await channel.send(embed=e, view=view)
+        try:
+            view.message = await channel.send(embed=e, view=view)
+        except:
+            pass
 
     @commands.Cog.listener()
     async def on_guild_remove(self, guild: discord.Guild):
         query = f"DELETE FROM query WHERE guild_id = {guild.id}"
-        conn, cursor = await _utils.execute_query(query)
-        await conn.commit()
-        await conn.close()
+        async with self.bot.pool.acquire() as conn:
+            await conn.execute("DELETE FROM query WHERE guild_id = ?", (guild.id,))
+            await conn.commit()
 
 async def setup(bot: commands.Bot):
     await bot.add_cog(Events(bot))

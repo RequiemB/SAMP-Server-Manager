@@ -1,10 +1,13 @@
 import discord
 from discord.ext import tasks
 
-import asqlite
 import datetime
 
-from helpers import utils as _utils
+from helpers import (
+    utils as _utils,
+    config
+)
+from .query import ServerOffline
 
 class Status:
     def __init__(self, bot):
@@ -14,7 +17,21 @@ class Status:
         self.query = bot.query
 
     async def _get_status(self, host, port, channel_id, guild_id):
-        data = await self.query.get_server_data(host, port)
+        channel = self.bot.get_channel(channel_id)
+
+        if channel is None:
+            channel = await self.bot.fetch_channel(channel_id)
+
+        try:
+            data = await self.query.get_server_data(host, port)
+        except ServerOffline:
+            e = discord.Embed(
+                description = f"{config.reactionFailure} The server didn't respond after 3 attempts.",
+                color=discord.Color.red()
+            )
+            await channel.send(embed=e)
+            return
+
         info = data["info"]
 
         try:
@@ -30,18 +47,19 @@ class Status:
             color = discord.Color.blue(),
             timestamp = datetime.datetime.now()
         )
+
+        player_list = f"{'#': <2}{'Name': ^32}{'Score': >4}\n"
+
+        for i, player in enumerate(data["players"].players):
+            player_list += f"{i: <2}{player.name: ^32}{player.score: >4}\n"
+
         e.add_field(name="IP Address", value=f"{host}:{port}")
         e.add_field(name="Gamemode", value=info.gamemode)
         e.add_field(name="Players", value=f"{info.players}/{info.max_players}")
-        e.add_field(name="Latency", value=f"{data["ping"] * 1000:.0f}ms")
-        e.add_field(name="Password", value=info.password)
+        e.add_field(name="Latency", value=f"{data['ping'] * 1000:.0f}ms")
         e.add_field(name="Language", value=info.language)
-
-        channel = self.bot.get_channel(channel_id)
-
-        if channel is None:
-            channel = await self.bot.fetch_channel(channel_id)
-
+        e.add_field(name="Players", value=f"```{player_list}```", inline=False)
+        
         message = await channel.send(embed=e)
         self.status_messages[guild_id] = message
     
@@ -50,7 +68,6 @@ class Status:
         ip = None
         port = None
         interval = None
-        fraction = None
         channel_id = None
 
         if data[1] is not None:
@@ -60,24 +77,21 @@ class Status:
             port = int(data[2])
 
         if data[3] is not None:
-            interval = data[3]
+            interval, _ = _utils.format_time(data[3])
 
         if data[4] is not None:
-            fraction = data[4]
+            channel_id = int(data[4])
 
-        if data[5] is not None:
-            channel_id = int(data[5])
-
-        return guild_id, ip, port, interval, fraction, channel_id
+        return guild_id, ip, port, interval, channel_id
 
     async def start_status_global(self):
 
-        conn, cursor = await _utils.execute_query("SELECT * FROM query")  
-        data = await cursor.fetchall()
+        async with self.bot.pool.acquire() as conn:
+            res = await conn.fetchall("SELECT * FROM query")
 
-        for index in data:
+        for index in res:
             
-            guild_id, ip, port, interval, fraction, channel_id = self.retrieve_config_from_data(index)
+            guild_id, ip, port, interval, channel_id = self.retrieve_config_from_data(index)
 
             @tasks.loop(seconds=10.0, reconnect=True)
             async def get_status(ip, port, channel_id, guild_id):
@@ -91,17 +105,13 @@ class Status:
                 self.tasks[guild_id] = get_status
                 self.tasks[guild_id].change_interval(seconds=interval)
                 self.tasks[guild_id].start(ip, port, channel_id, guild_id)
-
-        await conn.close()
                 
     async def start_status_with_guild(self, guild):
 
-        query = f"SELECT * FROM query WHERE guild_id = {guild.id}"
+        async with self.bot.pool.acquire() as conn:
+            res = await conn.fetchone("SELECT * FROM query")
 
-        conn, cursor = await _utils.execute_query(query)
-        data = await cursor.fetchone()
-
-        guild_id, ip, port, interval, fraction, channel_id = self.retrieve_config_from_data(data)
+        guild_id, ip, port, interval, channel_id = self.retrieve_config_from_data(res)
 
         @tasks.loop(seconds=float(interval), reconnect=True)
         async def get_status(ip, port, channel_id, guild_id):
