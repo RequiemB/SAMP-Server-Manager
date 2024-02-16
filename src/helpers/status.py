@@ -109,7 +109,7 @@ class Status:
     async def start_status_with_guild(self, guild):
 
         async with self.bot.pool.acquire() as conn:
-            res = await conn.fetchone("SELECT * FROM query")
+            res = await conn.fetchone("SELECT * FROM query WHERE guild_id = ?", (guild.id,))
 
         guild_id, ip, port, interval, channel_id = self.retrieve_config_from_data(res)
 

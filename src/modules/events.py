@@ -182,27 +182,6 @@ class Events(commands.Cog):
         self.bot = bot
         self.status = bot._status
 
-    @commands.command()
-    async def lololol(self, ctx):
-        e = discord.Embed(
-            title = self.bot.user.name,
-            description = "Thanks for inviting me to this guild! You can now get information about your SA-MP server and even set a channel to send the information in a given interval.\n\nYou need to do some basic configuration to access all the bot's features. They are listed below.\nYou can set them now by using the buttons. It's recommended to configure it now.",
-            color = discord.Color.blue(),
-            timestamp = datetime.now()
-        )
-
-        e.add_field(name="Server", value=f"{config.reactionFailure} Not Configured")
-        e.add_field(name="Interval", value=f"{config.reactionFailure} Not Configured")
-        e.add_field(name="Channel", value=f"{config.reactionFailure} Not Configured")
-
-        e.set_footer(text="Made by requiem.b", icon_url="https://cdn.discordapp.com/avatars/680416522245636183/08d6f631895d23878a8028e110262a8d.png?size=1024")
-
-        view = Config(self.status, e)
-        try:
-            view.message = await ctx.channel.send(embed=e, view=view)
-        except:
-            pass
-
     @commands.Cog.listener()
     async def on_guild_join(self, guild: discord.Guild):
         async with self.bot.pool.acquire() as conn:

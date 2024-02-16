@@ -4,6 +4,7 @@ from discord import app_commands
 
 import asqlite
 import asyncio
+import trio_asyncio
 
 from helpers import (
     utils as _utils,
@@ -15,8 +16,6 @@ from samp_query import (
     InvalidRCONPassword,
     RCONDisabled,
 )
-
-from datetime import datetime, timedelta, time
 
 class RCONLogin(discord.ui.Modal):
     def __init__(self, cog, user, guild, ip, port):
@@ -30,19 +29,18 @@ class RCONLogin(discord.ui.Modal):
         self.add_item(self.password)
 
     async def on_submit(self, interaction: discord.Interaction): 
+        await interaction.response.send_message("Waiting for a response from the server...", ephemeral=True)
         try:
             await self.cog.login_rcon(self.user, self.guild, self.ip, self.port, self.password.value)
         except InvalidRCONPassword:
             e = discord.Embed(description=f"{config.reactionFailure} The RCON password is invalid.", color=discord.Color.red())
-            await interaction.response.send_message(embed=e, ephemeral=True)
-        except RCONDisabled:
-#            e = discord.Embed(description=f"{config.reactionFailure} RCON is disabled in this server.", color=discord.Color.red())
-#            await interaction.response.send_message(embed=e, ephemeral=True)
-            pass
-#        else:
-        finally:
+            await interaction.edit_original_response(content=None, embed=e)
+        except RCONDisabled: # RCONDisabled is being raised always due to a bug in the library
+            e = discord.Embed(description=f"{config.reactionFailure} RCON is disabled in this server.", color=discord.Color.red())
+            await interaction.edit_original_response(content=None, embed=e)
+        else:
             e = discord.Embed(description=f"{config.reactionSuccess} You have successfully logged into the RCON of **{self.ip}:{self.port}**. Your session expires in 10 minutes.", color=discord.Color.green())
-            await interaction.response.send_message(embed=e, ephemeral=True)
+            await interaction.edit_original_response(content=None, embed=e)
 
 class RCON(commands.GroupCog, name="rcon", description="All the RCON commands lie under this group."):
     def __init__(self, bot: commands.Bot):
@@ -50,11 +48,8 @@ class RCON(commands.GroupCog, name="rcon", description="All the RCON commands li
         self.query = bot.query
     
     async def login_rcon(self, user: discord.Member, guild: discord.Guild, ip: str, port: int, password: str):
-        client = Client(ip=ip, port=port, rcon_password=password)
-        try:
-            response = await self.query.send_rcon_command(client, f'echo {user.name} has logged into RCON in {guild.name}.')
-        except:
-            pass
+        client = await trio_asyncio.trio_as_aio(self.query.connect)(ip, port, password)
+        response = await self.query.send_rcon_command(client, f'echo {user.name} has logged into RCON in {guild.name}.')
         await self.authenticate_user(user, guild, client)
 
     @property
