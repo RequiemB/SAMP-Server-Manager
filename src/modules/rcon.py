@@ -90,28 +90,21 @@ class RCON(commands.GroupCog, name="rcon", description="All the RCON commands li
 
     @app_commands.command(name="login", description="Logs into the RCON of the SA-MP server set in the guild.")
     async def rcon_login(self, interaction: discord.Interaction):
-        conn = await asqlite.connect("./database/query.db")
-        cursor = await conn.cursor()
+        async with self.bot.pool.acquire() as conn:
+            res = await conn.fetchone("SELECT * FROM query WHERE guild_id = ?", (interaction.guild.id,))
 
-        await cursor.execute("SELECT * FROM query WHERE guild_id = ?", (interaction.guild.id,))
-        data = await cursor.fetchone()
-
-        if data[1] is None:
+        if res[1] is None:
             e = discord.Embed(description=f"{config.reactionFailure} You need to configure a SAMP server for this guild before logging into RCON.", color=discord.Color.red())
             await interaction.response.send_message(embed=e)
-            await conn.close()
             return
 
         if self.is_logged_in(interaction.guild.id, interaction.user.id):
             e = discord.Embed(description=":floppy_disk: You're already logged in to RCON.", color=discord.Color.red())
             await interaction.response.send_message(embed=e, ephemeral=True)
-            await conn.close()
             return 
 
-        login = RCONLogin(self, interaction.user, interaction.guild, data[1], data[2])
-        await interaction.response.send_modal(login)
-
-        await conn.close()        
+        login = RCONLogin(self, interaction.user, interaction.guild, res[1], res[2]) # res[1], res[2] = IP, Port
+        await interaction.response.send_modal(login)    
         
     @app_commands.command(name="cmd", description="Sends a RCON command to the SA-MP server set in the guild.")
     async def rcon_cmd(self, interaction: discord.Interaction, cmd: str):
