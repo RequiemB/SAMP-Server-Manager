@@ -45,8 +45,6 @@ class QueryBot(commands.Bot):
             activity=discord.Activity(name="your SAMP server", type=discord.ActivityType.watching),
         )
 
-        self.tree.on_error = self.on_app_command_error
-
     async def on_ready(self) -> None:
         print(f"Logged in as {self.user}.", flush=True)
 
@@ -64,16 +62,6 @@ class QueryBot(commands.Bot):
                 traceback.print_exc()
             else:
                 self.logger.info(f"Loaded extension {extension}.")
-
-    async def on_app_command_error(self, interaction: discord.Interaction, error: app_commands.AppCommandError) -> None:
-        if isinstance(error, query.ServerOffline):
-            e = discord.Embed(
-                description = f"{config.reactionFailure} The server didn't respond after 3 attempts.",
-                color=discord.Color.red()
-            )
-            await interaction.followup.edit(embed=e)
-        else:
-            raise error
 
 bot = QueryBot()
 

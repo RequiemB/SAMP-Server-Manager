@@ -138,7 +138,7 @@ class Config(discord.ui.View):
         try:
             message = await interaction.client.wait_for('message', timeout=30.0, check=check)
         except asyncio.TimeoutError:
-            command_mention = await _utils.format_command_mention_from_command(interaction.client, "server", "channel")
+            command_mention = await _utils.command_mention_from_tree(interaction.client, 1, "server channel")
             e.description = f":warning: Message has timed out. Use the command {command_mention} to set a status channel."
             e.color = discord.Color.red()
             await interaction.edit_original_response(embed=e)

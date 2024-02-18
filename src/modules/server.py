@@ -8,6 +8,7 @@ import asqlite
 from helpers import (
     utils as _utils,
     config,
+    query
 )
 
 from samp_query import ServerInfo
@@ -112,7 +113,13 @@ class Server(commands.GroupCog, name='server', description="All the server comma
         ip = res[1]
         port = int(res[2])
 
-        data = await self.query.get_server_data(ip, port)
+        try:
+            data = await self.query.get_server_data(ip, port)
+        except query.ServerOffline:
+            e = discord.Embed(description=f"{config.reactionFailure} The server didn't respond after 3 attempts.", color=discord.Color.red())
+            await interaction.followup.send(content=None, embed=e)
+            return
+        
         info: ServerInfo = data["info"]
 
         e = discord.Embed(
@@ -183,8 +190,8 @@ class Server(commands.GroupCog, name='server', description="All the server comma
                 if res[4] is not None and res[3] is not None:
                     await self._status.start_status_with_guild(interaction.guild)
                 else:
-                    server_channel = await _utils.command_mention_from_tree(interaction.client, 1, "channel")
-                    server_interval = await _utils.command_mention_from_tree(interaction.client, 1, "interval")
+                    server_channel = await _utils.command_mention_from_tree(interaction.client, 1, "server channel")
+                    server_interval = await _utils.command_mention_from_tree(interaction.client, 1, "server interval")
                     if res[4] is None and res[3] is None:
                          e.description += f"\n\n:warning: You must set a channel to post server status in using the {server_channel} command.\n:warning: You must set an interval to query server status using the {server_interval} command."
                     elif res[4] is None:
@@ -214,7 +221,7 @@ class Server(commands.GroupCog, name='server', description="All the server comma
             res = await conn.fetchone("SELECT * FROM query WHERE guild_id = ?", (interaction.guild.id,))
 
         if res[1] is None: # IP
-            command_mention = _utils.command_mention_from_tree(interaction.client, 1, "set")
+            command_mention = _utils.command_mention_from_tree(interaction.client, 1, "server set")
 
             e = discord.Embed(
                 description = f"{config.reactionFailure} You must configure a SA-MP server for this guild using the {command_mention} command before setting a channel/an interval.",
@@ -252,7 +259,7 @@ class Server(commands.GroupCog, name='server', description="All the server comma
         if interval is not None:
             e.description = f"{config.reactionSuccess} Successfully set the SA-MP server status channel to {channel.mention} and the interval to `{interval}`."
         else:
-            command_mention = _utils.command_mention_from_tree(interaction.client, 1, "interval")
+            command_mention = _utils.command_mention_from_tree(interaction.client, 1, "server interval")
             e.description = f"{config.reactionSuccess} Successfully set the SA-MP server status channel to {channel.mention}. Use {command_mention} to set an interval."
         
         await interaction.response.send_message(embed=e)
@@ -274,7 +281,7 @@ class Server(commands.GroupCog, name='server', description="All the server comma
             res = await conn.fetchone("SELECT * FROM query WHERE guild_id = ?", (interaction.guild.id,))
 
         if res[1] is None: # IP
-            command_mention = _utils.command_mention_from_tree(interaction.client, 1, "set")
+            command_mention = _utils.command_mention_from_tree(interaction.client, 1, "server set")
 
             e = discord.Embed(
                 description = f"{config.reactionFailure} You must configure a SA-MP server for this guild using the {command_mention} command before setting an interval.",
@@ -301,7 +308,7 @@ class Server(commands.GroupCog, name='server', description="All the server comma
         )
 
         if res[4] is None:
-            command_mention = _utils.command_mention_from_tree(interaction.client, 1, "channel")
+            command_mention = _utils.command_mention_from_tree(interaction.client, 1, "server channel")
             e.description += f"\n\n:warning: You must set a channel to send SA-MP server status using {command_mention}."
         else:
             await self._status.start_status_with_guild(interaction.guild)
