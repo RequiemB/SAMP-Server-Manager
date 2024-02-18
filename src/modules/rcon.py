@@ -8,7 +8,8 @@ import trio_asyncio
 
 from helpers import (
     utils as _utils,
-    config
+    config,
+    query
 )
 
 from samp_query import (
@@ -35,8 +36,11 @@ class RCONLogin(discord.ui.Modal):
         except InvalidRCONPassword:
             e = discord.Embed(description=f"{config.reactionFailure} The RCON password is invalid.", color=discord.Color.red())
             await interaction.edit_original_response(content=None, embed=e)
-        except RCONDisabled: # RCONDisabled is being raised always due to a bug in the library
+        except RCONDisabled: 
             e = discord.Embed(description=f"{config.reactionFailure} RCON is disabled in this server.", color=discord.Color.red())
+            await interaction.edit_original_response(content=None, embed=e)
+        except query.ServerOffline:
+            e = discord.Embed(description=f"{config.reactionFailure} The server didn't respond after 3 attempts.", color=discord.Color.red())
             await interaction.edit_original_response(content=None, embed=e)
         else:
             e = discord.Embed(description=f"{config.reactionSuccess} You have successfully logged into the RCON of **{self.ip}:{self.port}**. Your session expires in 10 minutes.", color=discord.Color.green())

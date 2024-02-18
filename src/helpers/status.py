@@ -17,6 +17,13 @@ class Status:
         self.query = bot.query
 
     async def _get_status(self, host, port, channel_id, guild_id):
+        try:
+            if self.status_messages[guild_id] is not None:
+                message = self.status_messages[guild_id]
+                await message.delete()
+        except:
+            pass
+
         channel = self.bot.get_channel(channel_id)
 
         if channel is None:
@@ -29,17 +36,10 @@ class Status:
                 description = f"{config.reactionFailure} The server didn't respond after 3 attempts.",
                 color=discord.Color.red()
             )
-            await channel.send(embed=e)
+            self.status_messages[guild_id] = await channel.send(embed=e)
             return
 
         info = data["info"]
-
-        try:
-            if self.status_messages[guild_id] is not None:
-                message = self.status_messages[guild_id]
-                await message.delete()
-        except:
-            pass
 
         e = discord.Embed(
             title = info.name,
@@ -77,7 +77,7 @@ class Status:
             port = int(data[2])
 
         if data[3] is not None:
-            interval, _ = _utils.format_time(data[3])
+            interval = _utils.format_time(data[3])
 
         if data[4] is not None:
             channel_id = int(data[4])
@@ -93,7 +93,7 @@ class Status:
             
             guild_id, ip, port, interval, channel_id = self.retrieve_config_from_data(index)
 
-            @tasks.loop(seconds=10.0, reconnect=True)
+            @tasks.loop(minutes=10.0, reconnect=True)
             async def get_status(ip, port, channel_id, guild_id):
                 await self._get_status(ip, port, channel_id, guild_id)
 
@@ -103,7 +103,7 @@ class Status:
 
             if (ip is not None and port is not None and interval is not None and channel_id is not None):
                 self.tasks[guild_id] = get_status
-                self.tasks[guild_id].change_interval(seconds=interval)
+                self.tasks[guild_id].change_interval(minutes=interval)
                 self.tasks[guild_id].start(ip, port, channel_id, guild_id)
                 
     async def start_status_with_guild(self, guild):
@@ -113,7 +113,7 @@ class Status:
 
         guild_id, ip, port, interval, channel_id = self.retrieve_config_from_data(res)
 
-        @tasks.loop(seconds=float(interval), reconnect=True)
+        @tasks.loop(minutes=float(interval), reconnect=True)
         async def get_status(ip, port, channel_id, guild_id):
             await self._get_status(ip, port, channel_id, guild_id)
 

@@ -46,8 +46,8 @@ class Overwrite(discord.ui.View):
             if self.data[5] is not None and self.data[3] is not None:
                 await interaction.client._status.start_status_with_guild(interaction.guild)
             else:
-                server_channel = await _utils.command_mention_from_tree(interaction.client, "server", "channel")
-                server_interval = await _utils.command_mention_from_tree(interaction.client, "server", "interval")
+                server_channel = _utils.command_mention_from_tree(interaction.client, "server", "channel")
+                server_interval = _utils.command_mention_from_tree(interaction.client, "server", "interval")
                 if self.data[5] is None and self.data[3] is None:
                      e.description += f"\n\n:warning: You must set a channel to post server status in using the {server_channel} command.\n:warning: You must set an interval to query server status using the {server_interval} command."
                 elif self.data[5] is None:
@@ -214,7 +214,7 @@ class Server(commands.GroupCog, name='server', description="All the server comma
             res = await conn.fetchone("SELECT * FROM query WHERE guild_id = ?", (interaction.guild.id,))
 
         if res[1] is None: # IP
-            command_mention = await _utils.command_mention_from_tree(interaction.client, 1, "set")
+            command_mention = _utils.command_mention_from_tree(interaction.client, 1, "set")
 
             e = discord.Embed(
                 description = f"{config.reactionFailure} You must configure a SA-MP server for this guild using the {command_mention} command before setting a channel/an interval.",
@@ -225,21 +225,17 @@ class Server(commands.GroupCog, name='server', description="All the server comma
             return
 
         duration: int
-        fraction: str
         query: str
         
         if interval is not None:
-            duration, fraction = _utils.format_time(interval)
-            if duration == "" and fraction == "":
-                e = discord.Embed(description = f"{config.reactionFailure} Invalid time format specified. Time must be passed as `1s` for a second or `1m` for a minute.", color = discord.Color.red())
-                await interaction.response.send_message(embed=e)
-                return
-            elif duration == "error" and fraction == "":
-                e = discord.Embed(description = f"{config.reactionFailure} Invalid time format specified. The minimum value is `30s` and the maximum value is `30m`.", color = discord.Color.red())
+            duration = _utils.format_time(interval)
+
+            if duration == "": # Gave a value above 30m or below 5m
+                e = discord.Embed(description = f"{config.reactionFailure} Invalid time format specified. The minimum value is `5m` and the maximum value is `30m`.", color = discord.Color.red())
                 await interaction.response.send_message(embed=e)
                 return
             else:
-                query = f"UPDATE query SET INTERVAL = ?, channel_id = ? WHERE guild_id = ?", (duration, channel.id, interaction.guild.id,)
+                query, parameters = "UPDATE query SET interval = ?, channel_id = ? WHERE guild_id = ?", (duration, channel.id, interaction.guild.id,)
         else:
             query, parameters = "UPDATE query SET channel_id = ? WHERE guild_id = ?", (channel.id, interaction.guild.id,)
 
@@ -256,7 +252,7 @@ class Server(commands.GroupCog, name='server', description="All the server comma
         if interval is not None:
             e.description = f"{config.reactionSuccess} Successfully set the SA-MP server status channel to {channel.mention} and the interval to `{interval}`."
         else:
-            command_mention = await _utils.command_mention_from_tree(interaction.client, 1, "interval")
+            command_mention = _utils.command_mention_from_tree(interaction.client, 1, "interval")
             e.description = f"{config.reactionSuccess} Successfully set the SA-MP server status channel to {channel.mention}. Use {command_mention} to set an interval."
         
         await interaction.response.send_message(embed=e)
@@ -278,7 +274,7 @@ class Server(commands.GroupCog, name='server', description="All the server comma
             res = await conn.fetchone("SELECT * FROM query WHERE guild_id = ?", (interaction.guild.id,))
 
         if res[1] is None: # IP
-            command_mention = await _utils.command_mention_from_tree(interaction.client, 1, "set")
+            command_mention = _utils.command_mention_from_tree(interaction.client, 1, "set")
 
             e = discord.Embed(
                 description = f"{config.reactionFailure} You must configure a SA-MP server for this guild using the {command_mention} command before setting an interval.",
@@ -287,20 +283,16 @@ class Server(commands.GroupCog, name='server', description="All the server comma
 
             await interaction.response.send_message(embed=e)
             return
+        
+        duration = _utils.format_time(interval)
 
-        duration, fraction = _utils.format_time(interval)
-
-        if duration == "" and fraction == "":
-            e = discord.Embed(description = f"{config.reactionFailure} Invalid time format specified. Time must be passed as `1s` for a second or `1m` for a minute.", color = discord.Color.red())
-            await interaction.response.send_message(embed=e)
-            return
-        elif duration == "error" and fraction == "":
-            e = discord.Embed(description = f"{config.reactionFailure} Invalid time format specified. The minimum value is `30s` and the maximum value is `30m`.", color = discord.Color.red())
+        if duration == "":
+            e = discord.Embed(description = f"{config.reactionFailure} Invalid time format specified. The minimum value is `5m` and the maximum value is `30m`.", color = discord.Color.red())
             await interaction.response.send_message(embed=e)
             return
 
         async with self.bot.pool.acquire() as conn:
-            await conn.execute("UPDATE query SET INTERVAL = ? WHERE guild_id = ?", (interval, interaction.guild.id,))
+            await conn.execute("UPDATE query SET interval = ? WHERE guild_id = ?", (interval, interaction.guild.id,))
             await conn.commit()
 
         e = discord.Embed(
@@ -309,7 +301,7 @@ class Server(commands.GroupCog, name='server', description="All the server comma
         )
 
         if res[4] is None:
-            command_mention = await _utils.command_mention_from_tree(interaction.client, 1, "channel")
+            command_mention = _utils.command_mention_from_tree(interaction.client, 1, "channel")
             e.description += f"\n\n:warning: You must set a channel to send SA-MP server status using {command_mention}."
         else:
             await self._status.start_status_with_guild(interaction.guild)

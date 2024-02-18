@@ -23,7 +23,7 @@ async def set_up_database(bot):
         # RCON Logs
 
         query = """CREATE TABLE IF NOT EXISTS logs (
-            guild_id INTEGER PRIMARY KEY NOT NULL,
+            guild_id INTEGER NOT NULL,
             user_id INTEGER,
             action INTEGER,
             time BLOB
@@ -43,37 +43,16 @@ def command_mention_from_interaction(interaction):
 
     return f"</{name}:{id}>"
 
-def format_time(duration):
-    raw_duration = duration
-    fmt = list(duration)
-    fraction = None
-    if "m" not in fmt and "s" not in fmt:
-        return "", ""
-    if "m" in fmt and "s" in fmt:
-        return "", ""
-    if "s" in fmt:
-        fraction = "s"
-        time = int(duration.replace("s", ""))
-        duration = time
-    elif "m" in fmt:
-        fraction = "m"
-        time = int(duration.replace("m", ""))
-        duration = time * 60
+def format_time(interval):
+    pattern = '^(30|[5-9]|[1-2][0-9])m$'
 
+    match = re.match(pattern, interval)
 
-    if duration < 30 and fraction == "s":
-        return "error", ""
-    if fraction == "m":
-        raw_duration = int(raw_duration.replace("m", ""))   
-        if raw_duration > 30:
-            return "error", ""
-    
-    if fraction == "s":
-        fraction = "seconds"
-    else:
-        fraction = "minutes"
+    if not match:
+        return ""
 
-    return duration, fraction
+    duration = int(match.group().replace("m", ""))  # Remove the m in the duration and return it
+    return duration
 
 
     

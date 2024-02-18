@@ -36,6 +36,7 @@ class QueryBot(commands.Bot):
         self._status = status.Status(self)
         self.rcon_logged = {}
         self.pool = None
+
         super().__init__(
             command_prefix = config.PREFIX,
             intents = discord.Intents.all(),
@@ -43,6 +44,8 @@ class QueryBot(commands.Bot):
             status=discord.Status.dnd, 
             activity=discord.Activity(name="your SAMP server", type=discord.ActivityType.watching),
         )
+
+        self.tree.on_error = self.on_app_command_error
 
     async def on_ready(self) -> None:
         print(f"Logged in as {self.user}.", flush=True)
@@ -68,7 +71,7 @@ class QueryBot(commands.Bot):
                 description = f"{config.reactionFailure} The server didn't respond after 3 attempts.",
                 color=discord.Color.red()
             )
-            await interaction.response.send_message(embed=e)
+            await interaction.followup.edit(embed=e)
         else:
             raise error
 

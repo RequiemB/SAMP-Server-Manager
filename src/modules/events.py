@@ -68,23 +68,19 @@ class IntervalModal(discord.ui.Modal):
         self.message = message
         self.__view = view
         self.embed = embed
-        self.interval = discord.ui.TextInput(label='Interval', placeholder="Example: 1m for a minute, 30s for 30 seconds and 10m for 10 minutes.")
+        self.interval = discord.ui.TextInput(label='Interval', placeholder="Example: 5m for 5 minutes and 10m for 10 minutes. Minimum values are 5m and 30m.")
         super().__init__(title="Set an Interval", timeout=60.0)
         self.add_item(self.interval)
         
     async def on_submit(self, interaction: discord.Interaction):
-        duration, fraction = _utils.format_time(self.interval.value)
-        if duration == "" and fraction == "":
-            e = discord.Embed(description = f"{config.reactionFailure} Invalid time format specified. Time must be passed as `1s` for a second or `1m` for a minute.", color = discord.Color.red())
-            await interaction.response.send_message(embed=e)
-            return
-        elif duration == "error" and fraction == "":
-            e = discord.Embed(description = f"{config.reactionFailure} Invalid time format specified. The minimum value is `30s` and the maximum value is `30m`.", color = discord.Color.red())
+        duration= _utils.format_time(self.interval.value)
+        if duration == "":
+            e = discord.Embed(description = f"{config.reactionFailure} Invalid time format specified. The minimum value is `5m` and the maximum value is `30m`.", color = discord.Color.red())
             await interaction.response.send_message(embed=e)
             return
 
         async with interaction.client.pool.acquire() as conn:
-            await conn.execute("UPDATE query SET INTERVAL = ? WHERE guild_id = ?", (duration, interaction.guild.id,))
+            await conn.execute("UPDATE query SET interval = ? WHERE guild_id = ?", (duration, interaction.guild.id,))
             await conn.commit()
 
         e = discord.Embed(
