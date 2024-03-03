@@ -19,33 +19,27 @@ class Query:
     async def _connect(self, host: str, port: int, rcon_password: str = None):
         client = Client(host, int(port), rcon_password)
 
-        try:
-            with trio.fail_after(TIMEOUT):
-                ping = await client.ping()
+        tries = 0
 
-        except (trio.TooSlowError, ConnectionRefusedError):
-            return None
-        
-        return client
+        while (tries < 3): # Retrying thrice
+            try:
+                with trio.fail_after(TIMEOUT):
+                    ping = await client.ping()
+
+            except (trio.TooSlowError, ConnectionRefusedError):
+                tries += 1
+                await trio.sleep(5)
+
+            else:
+                return client # Return the client if the server is responsive so that the exception isn't raised
+            
+        raise ServerOffline
 
     async def _get_server_data(self, host: str, port: int):
-
         client = await self.connect(host, port)
-        if client is None:
-            tries = 1
-
-            while (tries <= 3 and client is None): # Retrying thrice 
-                await trio.sleep(5)
-                
-                tries += 1
-                client = await self.connect(host, port)
-
-            if client is None:
-                raise ServerOffline
 
         ping = await client.ping()
         info = await client.info()
-        is_omp = await client.is_omp()
         rules = await client.rules()
         players = await client.players()
 
@@ -53,7 +47,6 @@ class Query:
 
         data["ping"] = ping
         data["info"] = info
-        data["is_omp"] = is_omp
         data["rules"] = rules
         data["players"] = players
 
@@ -61,18 +54,6 @@ class Query:
     
     async def _get_player_count(self, host: str, port: int):
         client = await self.connect(host, port)
-        if client is None:
-            tries = 1
-
-            while (tries <= 3 and client is None): # Retrying thrice 
-                await trio.sleep(5)
-                
-                tries += 1
-                client = await self.connect(host, port)
-
-            if client is None:
-                raise ServerOffline
-            
         info = await client.info()
 
         return info.players, info.max_players

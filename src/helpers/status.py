@@ -9,6 +9,8 @@ from helpers import (
 )
 from .query import ServerOffline
 
+from modules.server import get_emoji
+
 class Status:
     def __init__(self, bot):
         self.bot = bot
@@ -33,33 +35,14 @@ class Status:
             data = await self.query.get_server_data(host, port)
         except ServerOffline:
             e = discord.Embed(
-                description = f"{config.reactionFailure} The server didn't respond after 3 attempts.",
+                description = f"{get_emoji('failure')} The server didn't respond after 3 attempts.",
                 color=discord.Color.red()
             )
             self.status_messages[guild_id] = await channel.send(embed=e)
             return
 
-        info = data["info"]
+        e = _utils.make_svinfo_embed(host, port, data)
 
-        e = discord.Embed(
-            title = info.name,
-            description = f"Basic information of {info.name}:",
-            color = discord.Color.blue(),
-            timestamp = datetime.datetime.now()
-        )
-
-        player_list = f"{'#': <2}{'Name': ^32}{'Score': >4}\n"
-
-        for i, player in enumerate(data["players"].players):
-            player_list += f"{i: <2}{player.name: ^32}{player.score: >4}\n"
-
-        e.add_field(name="IP Address", value=f"{host}:{port}")
-        e.add_field(name="Gamemode", value=info.gamemode)
-        e.add_field(name="Players", value=f"{info.players}/{info.max_players}")
-        e.add_field(name="Latency", value=f"{data['ping'] * 1000:.0f}ms")
-        e.add_field(name="Language", value=info.language)
-        e.add_field(name="Players", value=f"```{player_list}```", inline=False)
-        
         message = await channel.send(embed=e)
         self.status_messages[guild_id] = message
     
@@ -77,7 +60,7 @@ class Status:
             port = int(data[2])
 
         if data[3] is not None:
-            interval = _utils.format_time(data[3])
+            interval = int(data[3])
 
         if data[4] is not None:
             channel_id = int(data[4])

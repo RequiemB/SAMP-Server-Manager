@@ -3,17 +3,23 @@ from discord.ext import commands, tasks
 from discord import app_commands
 
 import re
-import asqlite
 
 from helpers import (
     utils as _utils,
     config,
     query
 )
-
-from samp_query import ServerInfo
+from typing import Literal
 
 ip_regex = "^((25[0-5]|(2[0-4]|1\d|[1-9]|)\d)\.){3}(25[0-5]|(2[0-4]|1\d|[1-9]|)\d)$"
+
+def get_emoji(_type: Literal['success', 'failure', 'timeout'] = 'success') -> str:
+    if _type == 'success':
+        return config.REACTION_SUCCESS if config.REACTION_SUCCESS else config.DEFAULT_REACTION_SUCCESS
+    elif _type == 'timeout':
+        return config.REACTION_TIMEOUT if config.REACTION_TIMEOUT else config.DEFAULT_REACTION_TIMEOUT
+    else:
+        return config.REACTION_FAILURE if config.REACTION_FAILURE else config.DEFAULT_REACTION_FAILURE
 
 class Overwrite(discord.ui.View):
     def __init__(self, ip: str, port: int, data: dict) -> None:
@@ -22,55 +28,61 @@ class Overwrite(discord.ui.View):
         self.ip = ip 
         self.port = port
         self.data = data
+        self.done: bool = False
 
     async def on_timeout(self):
+        if self.done:
+            return 
+        
         for button in self.children:
             button.disabled = True
 
         e = discord.Embed(
-            description = f"{config.reactionFailure} The command timed out. Run the command again to set a SA-MP server for this guild.",
+            description = f"{get_emoji('failure')} The command timed out. Run the command again to set a SA-MP server for this guild.",
             color = discord.Color.red()
         )
         await self.message.edit(embed=e, view=self)
 
-    @discord.ui.button(label="Confirm", style=discord.ButtonStyle.green, emoji=config.reactionSuccess if config.reactionSuccess else None)
+    @discord.ui.button(label="Confirm", style=discord.ButtonStyle.green, emoji=get_emoji())
     async def confirm(self, interaction: discord.Interaction, button: discord.ui.Button):
         async with interaction.client.pool.acquire() as conn:
             await conn.execute("UPDATE query SET ip = ?, port = ? WHERE guild_id = ?", (self.ip, self.port, interaction.guild.id,))
             await conn.commit()
 
         e = discord.Embed(
-            description = f"{config.reactionSuccess} Successfully set the SA-MP server for this guild to **{self.ip}:{self.port}**.",
+            description = f"{get_emoji()} Successfully set the SA-MP server for this guild to **{self.ip}:{self.port}**.",
             color = discord.Color.green()
         )
         try:
-            if self.data[5] is not None and self.data[3] is not None:
+            if self.data[4] is not None and self.data[3] is not None:
                 await interaction.client._status.start_status_with_guild(interaction.guild)
             else:
                 server_channel = _utils.command_mention_from_tree(interaction.client, "server", "channel")
                 server_interval = _utils.command_mention_from_tree(interaction.client, "server", "interval")
-                if self.data[5] is None and self.data[3] is None:
+                if self.data[4] is None and self.data[3] is None:
                      e.description += f"\n\n:warning: You must set a channel to post server status in using the {server_channel} command.\n:warning: You must set an interval to query server status using the {server_interval} command."
-                elif self.data[5] is None:
+                elif self.data[4] is None:
                     e.description += f"\n\n:warning: You must set a channel to post server status in using the {server_channel} command."
                 elif self.data[3] is None:
                     e.description += f"\n\n:warning: You must set an interval to query server status using the {server_interval} command."
         except:
             pass
 
+        self.done = True
         await interaction.response.send_message(embed=e)
 
         for button in self.children:
             button.disabled = True
         await self.message.edit(view=self)
 
-    @discord.ui.button(label="Cancel", style=discord.ButtonStyle.red, emoji=config.reactionFailure if config.reactionFailure else None)
+    @discord.ui.button(label="Cancel", style=discord.ButtonStyle.red, emoji=get_emoji('failure'))
     async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_message(content="Successfully cancelled the configuration.")
 
         for button in self.children:
             button.disabled = True
 
+        self.done = True
         await self.message.edit(view=self)
 
 class Server(commands.GroupCog, name='server', description="All the server commands lie under this group."):
@@ -104,7 +116,7 @@ class Server(commands.GroupCog, name='server', description="All the server comma
         if res[1] is None: # IP
             command_mention = _utils.command_mention_from_tree(self.bot, 1, "server set") # The second argument specifies which group the command is in, 0 for RCON and 1 for Server.
             e = discord.Embed(
-                description = f"{config.reactionFailure} No SA-MP server has been configured for this guild. Ask a manager to set one using the {command_mention} command.",
+                description = f"{get_emoji('failure')} No SA-MP server has been configured for this guild. Ask a manager to set one using the {command_mention} command.",
                 color = discord.Color.red()
             )
             await interaction.followup.send(embed=e)
@@ -116,30 +128,12 @@ class Server(commands.GroupCog, name='server', description="All the server comma
         try:
             data = await self.query.get_server_data(ip, port)
         except query.ServerOffline:
-            e = discord.Embed(description=f"{config.reactionFailure} The server didn't respond after 3 attempts.", color=discord.Color.red())
+            e = discord.Embed(description=f"{get_emoji('failure')} The server didn't respond after 3 attempts.", color=discord.Color.red())
             await interaction.followup.send(content=None, embed=e)
             return
+
+        e = _utils.make_svinfo_embed(ip, port, data)
         
-        info: ServerInfo = data["info"]
-
-        e = discord.Embed(
-            title = info.name,
-            description = f"Basic information of {info.name}:",
-            color = discord.Color.blue(),
-            timestamp = interaction.created_at
-        )
-
-        player_list = f"{'#':<2}{'Name':^32}{'Score':>4}\n"
-
-        for i, player in enumerate(data["players"].players):
-            player_list += f"{i+1:<2}{player.name:^32}{player.score:>4}\n"
-
-        e.add_field(name="IP Address", value=f"{ip}:{port}")
-        e.add_field(name="Gamemode", value=info.gamemode)
-        e.add_field(name="Players", value=f"{info.players}/{info.max_players}")
-        e.add_field(name="Latency", value=f"{data['ping'] * 1000:.0f}ms")
-        e.add_field(name="Language", value=info.language)
-        e.add_field(name="Players", value=f"```{player_list}```", inline=False)
         await interaction.followup.send(embed=e)
 
     @app_commands.command(name="set", description="Sets a SA-MP server for this guild.", extras={"cog": "Server"})
@@ -150,7 +144,7 @@ class Server(commands.GroupCog, name='server', description="All the server comma
     async def server_set(self, interaction: discord.Interaction, ip: str, port: int):
         if not interaction.user.guild_permissions.manage_guild:
             e = discord.Embed(
-                description = f"{config.reactionFailure} You require the **Manage Guild** permission in order to execute this command.",
+                description = f"{get_emoji('failure')} You require the **Manage Guild** permission in order to execute this command.",
                 color = discord.Color.red()
             )
             await interaction.response.send_message(embed=e)
@@ -158,7 +152,7 @@ class Server(commands.GroupCog, name='server', description="All the server comma
 
         if not re.search(self.ip, ip):
             e = discord.Embed(
-                description = f"{config.reactionFailure} The IP: **{ip}** is not a valid IP address.",
+                description = f"{get_emoji('failure')} The IP: **{ip}** is not a valid IP address.",
                 color = discord.Color.red()
             )
             await interaction.response.send_message(embed=e)
@@ -170,7 +164,7 @@ class Server(commands.GroupCog, name='server', description="All the server comma
         is_server_set: bool = res[1] is not None # IP
         if is_server_set:
             e = discord.Embed(
-                description = f"{config.reactionFailure} An SA-MP server is already configured for this guild. Do you wish to overwrite?",
+                description = f"{get_emoji('failure')} An SA-MP server is already configured for this guild. Do you wish to overwrite?",
                 color = discord.Color.red()
             )
             view = Overwrite(ip, port, res)
@@ -182,7 +176,7 @@ class Server(commands.GroupCog, name='server', description="All the server comma
                 await conn.commit()
 
             e = discord.Embed(
-                description = f"{config.reactionSuccess} Successfully set the SA-MP server for this guild to **{ip}:{port}**.",
+                description = f"{get_emoji()} Successfully set the SA-MP server for this guild to **{ip}:{port}**.",
                 color = discord.Color.green()
             )
 
@@ -206,12 +200,12 @@ class Server(commands.GroupCog, name='server', description="All the server comma
     @app_commands.command(name="channel", description="Sets the channel in which the bot updates the SA-MP server information.", extras={"cog": "Server"})
     @app_commands.describe(
         channel="The channel in which the bot should update the SA-MP server info.",
-        interval="The interval at which the info should be sent. Must be higher than 30s and lower than 30m. Example Usage: 1s for 1 second, 1m for 1 minute."
+        interval="The interval at which the info should be sent. Must be higher than 5m and lower than 30m. Example usage: 5m for 5 minutes, 25m for 25 minutes."
     )
     async def server_channel(self, interaction: discord.Interaction, channel: discord.TextChannel, interval: str = None):
         if not interaction.user.guild_permissions.manage_guild:
             e = discord.Embed(
-                description = f"{config.reactionFailure} You require the **Manage Guild** permission in order to execute this command.",
+                description = f"{get_emoji('failure')} You require the **Manage Guild** permission in order to execute this command.",
                 color = discord.Color.red()
             )
             await interaction.response.send_message(embed=e)
@@ -224,7 +218,7 @@ class Server(commands.GroupCog, name='server', description="All the server comma
             command_mention = _utils.command_mention_from_tree(interaction.client, 1, "server set")
 
             e = discord.Embed(
-                description = f"{config.reactionFailure} You must configure a SA-MP server for this guild using the {command_mention} command before setting a channel/an interval.",
+                description = f"{get_emoji('failure')} You must configure a SA-MP server for this guild using the {command_mention} command before setting a channel/an interval.",
                 color = discord.Color.red()
             )
 
@@ -238,7 +232,7 @@ class Server(commands.GroupCog, name='server', description="All the server comma
             duration = _utils.format_time(interval)
 
             if duration == "": # Gave a value above 30m or below 5m
-                e = discord.Embed(description = f"{config.reactionFailure} Invalid time format specified. The minimum value is `5m` and the maximum value is `30m`.", color = discord.Color.red())
+                e = discord.Embed(description = f"{get_emoji('failure')} Invalid time format specified. The minimum value is `5m` and the maximum value is `30m`.", color = discord.Color.red())
                 await interaction.response.send_message(embed=e)
                 return
             else:
@@ -257,21 +251,21 @@ class Server(commands.GroupCog, name='server', description="All the server comma
 
         e = discord.Embed(color = discord.Color.green())
         if interval is not None:
-            e.description = f"{config.reactionSuccess} Successfully set the SA-MP server status channel to {channel.mention} and the interval to `{interval}`."
+            e.description = f"{get_emoji()} Successfully set the SA-MP server status channel to {channel.mention} and the interval to `{interval}`."
         else:
             command_mention = _utils.command_mention_from_tree(interaction.client, 1, "server interval")
-            e.description = f"{config.reactionSuccess} Successfully set the SA-MP server status channel to {channel.mention}. Use {command_mention} to set an interval."
+            e.description = f"{get_emoji()} Successfully set the SA-MP server status channel to {channel.mention}. Use {command_mention} to set an interval."
         
         await interaction.response.send_message(embed=e)
 
     @app_commands.command(name="interval", description="Sets the interval at which the info should be sent.", extras={"cog": "Server"})
     @app_commands.describe(
-        interval="The interval at which the info should be sent. Must be higher than 30s and lower than 30m. Example Usage: 1s for 1 second, 1m for 1 minute."
+        interval="The interval at which the info should be sent. Must be higher than 5m and lower than 30m. Example usage: 5m for 5 minutes, 25m for 25 minutes."
     )
     async def server_interval(self, interaction: discord.Interaction, interval: str):
         if not interaction.user.guild_permissions.manage_guild:
             e = discord.Embed(
-                description = f"{config.reactionFailure} You require the **Manage Guild** permission in order to execute this command.",
+                description = f"{get_emoji('failure')} You require the **Manage Guild** permission in order to execute this command.",
                 color = discord.Color.red()
             )
             await interaction.response.send_message(embed=e)
@@ -284,7 +278,7 @@ class Server(commands.GroupCog, name='server', description="All the server comma
             command_mention = _utils.command_mention_from_tree(interaction.client, 1, "server set")
 
             e = discord.Embed(
-                description = f"{config.reactionFailure} You must configure a SA-MP server for this guild using the {command_mention} command before setting an interval.",
+                description = f"{get_emoji('failure')} You must configure a SA-MP server for this guild using the {command_mention} command before setting an interval.",
                 color = discord.Color.red()
             )
 
@@ -294,16 +288,16 @@ class Server(commands.GroupCog, name='server', description="All the server comma
         duration = _utils.format_time(interval)
 
         if duration == "":
-            e = discord.Embed(description = f"{config.reactionFailure} Invalid time format specified. The minimum value is `5m` and the maximum value is `30m`.", color = discord.Color.red())
+            e = discord.Embed(description = f"{get_emoji('failure')} Invalid time format specified. The minimum value is `5m` and the maximum value is `30m`.", color = discord.Color.red())
             await interaction.response.send_message(embed=e)
             return
 
         async with self.bot.pool.acquire() as conn:
-            await conn.execute("UPDATE query SET interval = ? WHERE guild_id = ?", (interval, interaction.guild.id,))
+            await conn.execute("UPDATE query SET interval = ? WHERE guild_id = ?", (duration, interaction.guild.id,))
             await conn.commit()
 
         e = discord.Embed(
-            description = f"{config.reactionSuccess} Successfully set the interval for this guild to `{interval}`.",
+            description = f"{get_emoji()} Successfully set the interval for this guild to `{interval}`.",
             color = discord.Color.green()
         )
 

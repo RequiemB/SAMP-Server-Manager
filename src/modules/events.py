@@ -10,6 +10,8 @@ from helpers import (
     config
 )
 
+from modules.server import get_emoji
+
 class ServerModal(discord.ui.Modal):
     def __init__(self, view: discord.ui.View, message: discord.Message, embed: discord.Embed):
         self.message = message
@@ -22,7 +24,7 @@ class ServerModal(discord.ui.Modal):
     async def on_submit(self, interaction: discord.Interaction):
         if not _utils.is_ip(self.ip.value):
             e = discord.Embed(
-                description = f"{config.reactionFailure} The IP: **{self.ip.value}** is not a valid IP address.",
+                description = f"{get_emoji('failure')} The IP: **{self.ip.value}** is not a valid IP address.",
                 color = discord.Color.red()
             )
             await interaction.response.send_message(embed=e, ephemeral=True)
@@ -30,22 +32,12 @@ class ServerModal(discord.ui.Modal):
 
         addr = self.ip.value.split(":")
 
-        try:
-            addr[1]
-        except IndexError:
-            e = discord.Embed(
-                description = f"{config.reactionFailure} The IP: **{self.ip.value}** is not a valid IP address.",
-                color = discord.Color.red()
-            )
-            await interaction.response.send_message(embed=e, ephemeral=True)
-            return
-
         async with interaction.client.pool.acquire() as conn:
             await conn.execute("UPDATE query SET IP = ?, PORT = ? WHERE guild_id = ?", (addr[0], addr[1], interaction.guild.id,))
             await conn.commit()
 
         e = discord.Embed(
-            description = f"{config.reactionSuccess} Successfully set the SA-MP server for this guild to **{addr[0]}:{addr[1]}**.",
+            description = f"{get_emoji()} Successfully set the SA-MP server for this guild to **{addr[0]}:{addr[1]}**.",
             color = discord.Color.green()
         )
 
@@ -53,9 +45,9 @@ class ServerModal(discord.ui.Modal):
         self.__view._server = True
 
         self.embed.clear_fields()
-        self.embed.add_field(name="Server", value=f"{config.reactionSuccess} Configured" if self.__view._server else f"{config.reactionFailure} Not Configured")
-        self.embed.add_field(name="Interval", value=f"{config.reactionSuccess} Configured" if self.__view._interval else f"{config.reactionFailure} Not Configured")
-        self.embed.add_field(name="Channel", value=f"{config.reactionSuccess} Configured" if self.__view._channel else f"{config.reactionFailure} Not Configured")
+        self.embed.add_field(name="Server", value=f"{get_emoji()} Configured" if self.__view._server else f"{get_emoji('failure')} Not Configured")
+        self.embed.add_field(name="Interval", value=f"{get_emoji()} Configured" if self.__view._interval else f"{get_emoji('failure')} Not Configured")
+        self.embed.add_field(name="Channel", value=f"{get_emoji()} Configured" if self.__view._channel else f"{get_emoji('failure')} Not Configured")
         await self.message.edit(embed=self.embed, view=self.__view)
 
         await interaction.response.send_message(embed=e, ephemeral=True)
@@ -75,7 +67,7 @@ class IntervalModal(discord.ui.Modal):
     async def on_submit(self, interaction: discord.Interaction):
         duration= _utils.format_time(self.interval.value)
         if duration == "":
-            e = discord.Embed(description = f"{config.reactionFailure} Invalid time format specified. The minimum value is `5m` and the maximum value is `30m`.", color = discord.Color.red())
+            e = discord.Embed(description = f"{get_emoji('failure')} Invalid time format specified. The minimum value is `5m` and the maximum value is `30m`.", color = discord.Color.red())
             await interaction.response.send_message(embed=e)
             return
 
@@ -84,7 +76,7 @@ class IntervalModal(discord.ui.Modal):
             await conn.commit()
 
         e = discord.Embed(
-            description = f"{config.reactionSuccess} Successfully set the interval for this guild to `{self.interval.value}`.",
+            description = f"{get_emoji()} Successfully set the interval for this guild to `{self.interval.value}`.",
             color = discord.Color.green()
         )
 
@@ -92,9 +84,9 @@ class IntervalModal(discord.ui.Modal):
         self.__view._interval = True
 
         self.embed.clear_fields()
-        self.embed.add_field(name="Server", value=f"{config.reactionSuccess} Configured" if self.__view._server else f"{config.reactionFailure} Not Configured")
-        self.embed.add_field(name="Interval", value=f"{config.reactionSuccess} Configured" if self.__view._interval else f"{config.reactionFailure} Not Configured")
-        self.embed.add_field(name="Channel", value=f"{config.reactionSuccess} Configured" if self.__view._channel else f"{config.reactionFailure} Not Configured")
+        self.embed.add_field(name="Server", value=f"{get_emoji()} Configured" if self.__view._server else f"{get_emoji('failure')} Not Configured")
+        self.embed.add_field(name="Interval", value=f"{get_emoji()} Configured" if self.__view._interval else f"{get_emoji('failure')} Not Configured")
+        self.embed.add_field(name="Channel", value=f"{get_emoji()} Configured" if self.__view._channel else f"{get_emoji('failure')} Not Configured")
         await self.message.edit(embed=self.embed, view=self.__view)
 
         await interaction.response.send_message(embed=e, ephemeral=True)
@@ -113,7 +105,8 @@ class Config(discord.ui.View):
         super().__init__(timeout=300.0)
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
-        return interaction.user.guild_permissions.manage_guild
+        if not interaction.user.guild_permissions.manage_guild:
+            e = discord.Embed()
 
     @discord.ui.button(style=discord.ButtonStyle.green, label="Set Server", emoji="<:au:981890460513620060>")
     async def server(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -149,7 +142,7 @@ class Config(discord.ui.View):
                 channel = await interaction.guild.fetch_channel(_id)
                 
                 if channel is None:
-                    e.description = f"{config.reactionFailure} An error occured while attempting to fetch the channel. Try again and if the issue still persists, try another channel and make sure I have permissions to view it."
+                    e.description = f"{get_emoji('failure')} An error occured while attempting to fetch the channel. Try again and if the issue still persists, try another channel and make sure I have permissions to view it."
                     await interaction.followup.send(embed=e, ephemeral=True)
                     return
                     
@@ -157,16 +150,16 @@ class Config(discord.ui.View):
                 await conn.execute("UPDATE query SET channel_id = ? WHERE guild_id = ?", (_id, interaction.guild.id,))
                 await conn.commit()
 
-            e.description = f"{config.reactionSuccess} Set the auto status updater channel to {channel.mention}."
+            e.description = f"{get_emoji()} Set the auto status updater channel to {channel.mention}."
             await interaction.edit_original_response(embed=e)
 
             self.children[2].disabled = True
             self._channel = True
 
             self.embed.clear_fields()
-            self.embed.add_field(name="Server", value=f"{config.reactionSuccess} Configured" if self._server else f"{config.reactionFailure} Not Configured")
-            self.embed.add_field(name="Interval", value=f"{config.reactionSuccess} Configured" if self._interval else f"{config.reactionFailure} Not Configured")
-            self.embed.add_field(name="Channel", value=f"{config.reactionSuccess} Configured" if self._channel else f"{config.reactionFailure} Not Configured")
+            self.embed.add_field(name="Server", value=f"{get_emoji()} Configured" if self._server else f"{get_emoji('failure')} Not Configured")
+            self.embed.add_field(name="Interval", value=f"{get_emoji()} Configured" if self._interval else f"{get_emoji('failure')} Not Configured")
+            self.embed.add_field(name="Channel", value=f"{get_emoji()} Configured" if self._channel else f"{get_emoji('failure')} Not Configured")
             
             await self.message.edit(embed=self.embed, view=self)
 
@@ -201,9 +194,9 @@ class Events(commands.Cog):
             timestamp = datetime.now()
         )
 
-        e.add_field(name="Server", value=f"{config.reactionFailure} Not Configured")
-        e.add_field(name="Interval", value=f"{config.reactionFailure} Not Configured")
-        e.add_field(name="Channel", value=f"{config.reactionFailure} Not Configured")
+        e.add_field(name="Server", value=f"{get_emoji('failure')} Not Configured")
+        e.add_field(name="Interval", value=f"{get_emoji('failure')} Not Configured")
+        e.add_field(name="Channel", value=f"{get_emoji('failure')} Not Configured")
 
         e.set_footer(text="Made by requiem.b", icon_url="https://cdn.discordapp.com/avatars/680416522245636183/08d6f631895d23878a8028e110262a8d.png?size=1024")
 

@@ -57,7 +57,7 @@ class QueryBot(commands.Bot):
         for extension in self._extensions:
             try:
                 await self.load_extension(extension)
-            except:
+            except Exception as e:
                 self.logger.error(f"Unable to load extension {extension}.")
                 traceback.print_exc()
             else:

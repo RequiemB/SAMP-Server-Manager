@@ -2,13 +2,11 @@ import discord
 from discord.ext import commands
 from discord import app_commands
 
-import asqlite
 import asyncio
 import trio_asyncio
 
 from helpers import (
     utils as _utils,
-    config,
     query
 )
 
@@ -18,8 +16,46 @@ from samp_query import (
     RCONDisabled,
 )
 
+from modules.server import get_emoji
+
+RCON_CMDLIST = [
+    "cmdlist",
+    "varlist",
+    "exit",
+    "echo",
+    "hostname",
+    "gamemodetext",
+    "mapname",
+    "exec",
+    "kick",
+    "ban",
+    "changemode",
+    "gmx",
+    "reloadbans",
+    "reloadlog",
+    "say",
+    "players",
+    "banip",
+    "unbanip",
+    "gravity",
+    "weather",
+    "loadfs",
+    "weburl",
+    "unloadfs",
+    "reloadfs",
+    "password",
+    "messageslimit",
+    "ackslimit",
+    "messageholelimit",
+    "playertimeout",
+    "language"
+]
+
+class NotLoggedIn(Exception):
+    "Exception raised when the user is not logged into RCON."
+
 class RCONLogin(discord.ui.Modal):
-    def __init__(self, cog, user, guild, ip, port):
+    def __init__(self, cog: commands.Cog, user: discord.Member, guild: discord.Guild, ip: str, port: int):
         self.cog = cog
         self.ip = ip
         self.port = port
@@ -30,22 +66,70 @@ class RCONLogin(discord.ui.Modal):
         self.add_item(self.password)
 
     async def on_submit(self, interaction: discord.Interaction): 
-        await interaction.response.send_message("Waiting for a response from the server...", ephemeral=True)
+        await interaction.response.send_message("Waiting for a response from the server...")
         try:
             await self.cog.login_rcon(self.user, self.guild, self.ip, self.port, self.password.value)
         except InvalidRCONPassword:
-            e = discord.Embed(description=f"{config.reactionFailure} The RCON password is invalid.", color=discord.Color.red())
+            e = discord.Embed(description=f"{get_emoji('failure')} The RCON password is invalid.", color=discord.Color.red())
             await interaction.edit_original_response(content=None, embed=e)
         except RCONDisabled: 
-            e = discord.Embed(description=f"{config.reactionFailure} RCON is disabled in this server.", color=discord.Color.red())
+            e = discord.Embed(description=f"{get_emoji('failure')} RCON is disabled in this server.", color=discord.Color.red())
             await interaction.edit_original_response(content=None, embed=e)
         except query.ServerOffline:
-            e = discord.Embed(description=f"{config.reactionFailure} The server didn't respond after 3 attempts.", color=discord.Color.red())
+            e = discord.Embed(description=f"{get_emoji('failure')} The server didn't respond after 3 attempts.", color=discord.Color.red())
             await interaction.edit_original_response(content=None, embed=e)
         else:
-            e = discord.Embed(description=f"{config.reactionSuccess} You have successfully logged into the RCON of **{self.ip}:{self.port}**. Your session expires in 10 minutes.", color=discord.Color.green())
+            e = discord.Embed(description=f"{get_emoji()} You have successfully logged into the RCON of **{self.ip}:{self.port}**. Your session expires in 10 minutes.", color=discord.Color.green())
             await interaction.edit_original_response(content=None, embed=e)
+        
+class RCONCommand(discord.ui.Modal):
+    def __init__(self, cog: commands.Cog, user: discord.Member, guild: discord.Guild):
+        self.cog = cog
+        self.user = user
+        self.guild = guild
 
+        try:
+            if self.cog.rcon_logged[guild.id][user.id] is not None:
+                self.client = self.cog.rcon_logged[guild.id][user.id]
+            else:
+                raise NotLoggedIn
+        except KeyError:
+            raise NotLoggedIn
+            
+        super().__init__(title="RCON Command")
+        self.command = discord.ui.TextInput(label="Command", placeholder="Command to execute. E.g. loadfs bare.pwn | exit | banip 127.0.0.1", required=True)
+        self.add_item(self.command)
+
+    async def on_submit(self, interaction: discord.Interaction):
+        command = self.command.value.split()[0]
+        if command not in RCON_CMDLIST:
+            e = discord.Embed(description=f"{get_emoji('failure')} `{command}` is not a RCON command.", color=discord.Color.red())
+            await interaction.response.send_message(embed=e)
+            return
+        
+        await interaction.response.send_message(f"RCON Command `{self.command.value}` has been sent. Waiting for a response from the server...", ephemeral=True)
+        try:
+            response = await interaction.client.query.send_rcon_command(self.client, self.command.value)
+        except query.ServerOffline:
+            e = discord.Embed(description=f"{get_emoji('failure')} The server didn't respond after 3 attempts.", color=discord.Color.red())
+            await interaction.edit_original_response(content=None, embed=e)
+        except RCONDisabled: # Might be because of high latency or other reasons, catch the error
+            e = discord.Embed(description=f"{get_emoji('timeout')} Timed out waiting for a response from the server.", color=discord.Color.red())
+            await interaction.edit_original_response(content=None, embed=e)       
+        else:
+            e = discord.Embed(
+                title = "RCON Command Information",
+                description = f"Invocation of the RCON Command by {interaction.user.mention} was successful.",
+                color = discord.Color.green(),
+                timestamp = discord.utils.utcnow()
+            )
+
+            e.add_field(name="Command", value=self.command.value)
+            e.add_field(name="Invoked at", value=discord.utils.format_dt(discord.utils.utcnow(), style="R"))
+            e.add_field(name="Response", value=f"```{response}```", inline=False)
+
+            await interaction.edit_original_response(content=None, embed=e)
+        
 class RCON(commands.GroupCog, name="rcon", description="All the RCON commands lie under this group."):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
@@ -54,7 +138,7 @@ class RCON(commands.GroupCog, name="rcon", description="All the RCON commands li
     async def login_rcon(self, user: discord.Member, guild: discord.Guild, ip: str, port: int, password: str):
         client = await trio_asyncio.trio_as_aio(self.query.connect)(ip, port, password)
         response = await self.query.send_rcon_command(client, f'echo {user.name} has logged into RCON in {guild.name}.')
-        await self.authenticate_user(user, guild, client)
+        self.authenticate_user(user, guild, client)
 
     @property
     def rcon_logged(self):
@@ -77,7 +161,7 @@ class RCON(commands.GroupCog, name="rcon", description="All the RCON commands li
         except KeyError:
             return False
 
-    async def authenticate_user(self, user: discord.Member, guild: discord.Guild, client: Client):
+    def authenticate_user(self, user: discord.Member, guild: discord.Guild, client: Client):
         self.rcon_logged = (guild.id, user.id, client)
 
         async def session_logout(user: discord.Member, guild: discord.Guild, client: Client):
@@ -98,7 +182,7 @@ class RCON(commands.GroupCog, name="rcon", description="All the RCON commands li
             res = await conn.fetchone("SELECT * FROM query WHERE guild_id = ?", (interaction.guild.id,))
 
         if res[1] is None:
-            e = discord.Embed(description=f"{config.reactionFailure} You need to configure a SAMP server for this guild before logging into RCON.", color=discord.Color.red())
+            e = discord.Embed(description=f"{get_emoji('failure')} You need to configure a SAMP server for this guild before logging into RCON.", color=discord.Color.red())
             await interaction.response.send_message(embed=e)
             return
 
@@ -111,8 +195,22 @@ class RCON(commands.GroupCog, name="rcon", description="All the RCON commands li
         await interaction.response.send_modal(login)    
         
     @app_commands.command(name="cmd", description="Sends a RCON command to the SA-MP server set in the guild.")
-    async def rcon_cmd(self, interaction: discord.Interaction, cmd: str):
-        await interaction.response.send_message("This feature is yet to be implemented.")
+    async def rcon_cmd(self, interaction: discord.Interaction):
+        if not self.is_logged_in(interaction.guild.id, interaction.user.id):
+            command_mention = _utils.command_mention_from_tree(interaction.client, 0, "rcon login")
+            e = discord.Embed(description=f"{get_emoji('failure')} You need to log into RCON using {command_mention} before executing RCON commands.", color=discord.Color.red())
+            await interaction.response.send_message(embed=e)
+            return
+
+        try: # There's a chance the user gets automatically logged out from the session while executing this command
+            command = RCONCommand(self, interaction.user, interaction.guild)
+        except NotLoggedIn:
+            command_mention = _utils.command_mention_from_tree(interaction.client, 0, "rcon login")
+            e = discord.Embed(description=f"{get_emoji('failure')} You need to log into RCON using {command_mention} before executing RCON commands.", color=discord.Color.red())
+            await interaction.response.send_message(embed=e)
+            return
+
+        await interaction.response.send_modal(command)
 
     @app_commands.command(name="whitelist", description="Whitelist a user to execute RCON commands.")
     @app_commands.describe(member="The user to whitelist.")
