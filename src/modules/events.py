@@ -15,7 +15,7 @@ class ServerModal(discord.ui.Modal):
         self.message = message
         self.__view = view
         self.embed = embed
-        self.ip = discord.ui.TextInput(label='Address', placeholder="Example IP address: 51.178.143.229")
+        self.ip = discord.ui.TextInput(label='Address', placeholder="Example IP address: 51.178.143.229:7777")
         super().__init__(title="Set a SA-MP server", timeout=60.0)
         self.add_item(self.ip)
         
@@ -113,15 +113,15 @@ class Config(discord.ui.View):
         
         return True
 
-    @discord.ui.button(style=discord.ButtonStyle.green, label="Set Server", emoji="<:au:981890460513620060>")
+    @discord.ui.button(style=discord.ButtonStyle.green, label="Set Server")
     async def server(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_modal(ServerModal(self, self.message, self.embed))
 
-    @discord.ui.button(style=discord.ButtonStyle.green, label="Set Interval", emoji="<:au:981890460513620060>")
+    @discord.ui.button(style=discord.ButtonStyle.green, label="Set Interval")
     async def interval(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.send_modal(IntervalModal(self, self.message, self.embed))
 
-    @discord.ui.button(style=discord.ButtonStyle.green, label="Set Channel", emoji="<:au:981890460513620060>")
+    @discord.ui.button(style=discord.ButtonStyle.green, label="Set Channel")
     async def channel(self, interaction: discord.Interaction, button: discord.ui.Button):
         e = discord.Embed(
             description = ":keyboard: Mention the channel to send the SA-MP status updates in this chat.\n:watch: This message will timeout in 30 seconds.",
