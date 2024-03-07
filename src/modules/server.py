@@ -11,8 +11,6 @@ from helpers import (
 )
 from typing import Literal
 
-ip_regex = "^((25[0-5]|(2[0-4]|1\d|[1-9]|)\d)\.){3}(25[0-5]|(2[0-4]|1\d|[1-9]|)\d)$"
-
 def get_emoji(_type: Literal['success', 'failure', 'timeout'] = 'success') -> str:
     if _type == 'success':
         return config.REACTION_SUCCESS if config.REACTION_SUCCESS else config.DEFAULT_REACTION_SUCCESS
@@ -57,8 +55,8 @@ class Overwrite(discord.ui.View):
             if self.data[4] is not None and self.data[3] is not None:
                 await interaction.client._status.start_status_with_guild(interaction.guild)
             else:
-                server_channel = _utils.command_mention_from_tree(interaction.client, "server", "channel")
-                server_interval = _utils.command_mention_from_tree(interaction.client, "server", "interval")
+                server_channel = _utils.command_mention_from_tree(interaction.client, 1, "server channel")
+                server_interval = _utils.command_mention_from_tree(interaction.client, 1, "server interval")
                 if self.data[4] is None and self.data[3] is None:
                      e.description += f"\n\n:warning: You must set a channel to post server status in using the {server_channel} command.\n:warning: You must set an interval to query server status using the {server_interval} command."
                 elif self.data[4] is None:
@@ -89,7 +87,6 @@ class Server(commands.GroupCog, name='server', description="All the server comma
     def __init__(self, bot: commands.Bot):
         self.bot = bot
         self._status = self.bot._status
-        self.ip = re.compile(ip_regex)
         self.query = self.bot.query
 
     async def cog_load(self):
@@ -150,9 +147,9 @@ class Server(commands.GroupCog, name='server', description="All the server comma
             await interaction.response.send_message(embed=e)
             return
 
-        if not re.search(self.ip, ip):
+        if not _utils.is_ip(f"{ip}:{port}"):
             e = discord.Embed(
-                description = f"{get_emoji('failure')} The IP: **{ip}** is not a valid IP address.",
+                description = f"{get_emoji('failure')} The IP: **{ip}:{port}** is not a valid IP address.",
                 color = discord.Color.red()
             )
             await interaction.response.send_message(embed=e)

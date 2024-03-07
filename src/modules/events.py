@@ -1,13 +1,11 @@
 import discord
 from discord.ext import commands
 
-import asqlite
 import asyncio
 
 from datetime import datetime
 from helpers import (
     utils as _utils,
-    config
 )
 
 from modules.server import get_emoji
@@ -17,7 +15,7 @@ class ServerModal(discord.ui.Modal):
         self.message = message
         self.__view = view
         self.embed = embed
-        self.ip = discord.ui.TextInput(label='Address', placeholder="Example IP address: 51.178.143.229:7777")
+        self.ip = discord.ui.TextInput(label='Address', placeholder="Example IP address: 51.178.143.229")
         super().__init__(title="Set a SA-MP server", timeout=60.0)
         self.add_item(self.ip)
         
@@ -29,11 +27,11 @@ class ServerModal(discord.ui.Modal):
             )
             await interaction.response.send_message(embed=e, ephemeral=True)
             return
-
+        
         addr = self.ip.value.split(":")
 
         async with interaction.client.pool.acquire() as conn:
-            await conn.execute("UPDATE query SET IP = ?, PORT = ? WHERE guild_id = ?", (addr[0], addr[1], interaction.guild.id,))
+            await conn.execute("UPDATE query SET ip = ?, port = ? WHERE guild_id = ?", (addr[0], addr[1], interaction.guild.id,))
             await conn.commit()
 
         e = discord.Embed(
@@ -106,7 +104,14 @@ class Config(discord.ui.View):
 
     async def interaction_check(self, interaction: discord.Interaction) -> bool:
         if not interaction.user.guild_permissions.manage_guild:
-            e = discord.Embed()
+            e = discord.Embed(
+                description = f"{get_emoji('failure')} You require the **Manage Guild** permission in order to execute this command.",
+                color = discord.Color.red()
+            )
+            await interaction.response.send_message(embed=e, ephemeral=True)
+            return False
+        
+        return True
 
     @discord.ui.button(style=discord.ButtonStyle.green, label="Set Server", emoji="<:au:981890460513620060>")
     async def server(self, interaction: discord.Interaction, button: discord.ui.Button):

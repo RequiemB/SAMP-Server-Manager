@@ -70,7 +70,9 @@ class RCONLogin(discord.ui.Modal):
         try:
             await self.cog.login_rcon(self.user, self.guild, self.ip, self.port, self.password.value)
         except InvalidRCONPassword:
-            e = discord.Embed(description=f"{get_emoji('failure')} The RCON password is invalid.", color=discord.Color.red())
+            self.cog.update_login_tries(self.guild, self.user)
+            tries_left = 3 - self.cog.login_tries[self.guild.id][self.user.id]
+            e = discord.Embed(description=f"{get_emoji('failure')} The RCON password is invalid. You have {tries_left} attempts left.", color=discord.Color.red())
             await interaction.edit_original_response(content=None, embed=e)
         except RCONDisabled: 
             e = discord.Embed(description=f"{get_emoji('failure')} RCON is disabled in this server.", color=discord.Color.red())
@@ -114,7 +116,7 @@ class RCONCommand(discord.ui.Modal):
             e = discord.Embed(description=f"{get_emoji('failure')} The server didn't respond after 3 attempts.", color=discord.Color.red())
             await interaction.edit_original_response(content=None, embed=e)
         except RCONDisabled: # Might be because of high latency or other reasons, catch the error
-            e = discord.Embed(description=f"{get_emoji('timeout')} Timed out waiting for a response from the server.", color=discord.Color.red())
+            e = discord.Embed(description=f"{get_emoji('timeout')} Timed out waiting for a response from the server. The potential error could be that {self.get_potential_error(command)}", color=discord.Color.red())
             await interaction.edit_original_response(content=None, embed=e)       
         else:
             e = discord.Embed(
@@ -129,11 +131,46 @@ class RCONCommand(discord.ui.Modal):
             e.add_field(name="Response", value=f"```{response}```", inline=False)
 
             await interaction.edit_original_response(content=None, embed=e)
-        
+
+    def get_potential_error(self, command: str): # This function is used to get the potential error from the server when no response is received, i.e. RCONDisabled is raised
+        error = ""
+
+        if command == "players": # players will receive no response when no players are online
+            error = "no players are online."
+
+        if command == "kick": # kick will receive no response when the playerid given is not active
+            error = "an invalid player id was provided."
+
+        if command == "ban": # same thing for ban
+            error = "an invalid player id was provided."
+
+        return error
+
+
 class RCON(commands.GroupCog, name="rcon", description="All the RCON commands lie under this group."):
     def __init__(self, bot: commands.Bot):
         self.bot = bot
         self.query = bot.query
+        self.login_tries = {}
+
+    def update_login_tries(self, guild: discord.Guild, user: discord.Member):
+        try:
+            self.login_tries[guild.id]
+        except KeyError:
+            self.login_tries[guild.id] = {}
+
+        try:
+            self.login_tries[guild.id][user.id] += 1
+        except:
+            self.login_tries[guild.id][user.id] = 1
+
+        if self.login_tries[guild.id][user.id] == 3:
+
+            async def reset_login_tries(guild: discord.Guild, user: discord.Member):
+                await asyncio.sleep(3000)
+                self.login_tries[guild.id][user.id] = 0
+
+            asyncio.create_task(reset_login_tries(guild, user))
     
     async def login_rcon(self, user: discord.Member, guild: discord.Guild, ip: str, port: int, password: str):
         client = await trio_asyncio.trio_as_aio(self.query.connect)(ip, port, password)
@@ -178,6 +215,14 @@ class RCON(commands.GroupCog, name="rcon", description="All the RCON commands li
 
     @app_commands.command(name="login", description="Logs into the RCON of the SA-MP server set in the guild.")
     async def rcon_login(self, interaction: discord.Interaction):
+        try:
+            if self.login_tries[interaction.guild.id][interaction.user.id] == 3:
+                e = discord.Embed(description=f"{get_emoji('failure')} You don't have any attempts remaining to log into RCON. You must wait until the count resets.", color=discord.Color.red())
+                await interaction.response.send_message(embed=e)
+                return
+        except:
+            pass
+
         async with self.bot.pool.acquire() as conn:
             res = await conn.fetchone("SELECT * FROM query WHERE guild_id = ?", (interaction.guild.id,))
 

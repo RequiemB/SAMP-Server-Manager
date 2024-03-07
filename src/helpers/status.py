@@ -1,11 +1,8 @@
 import discord
 from discord.ext import tasks
 
-import datetime
-
 from helpers import (
     utils as _utils,
-    config
 )
 from .query import ServerOffline
 

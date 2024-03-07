@@ -1,6 +1,6 @@
 aiohttp==3.9.3
 aiosignal==1.3.1
-asqlite==2.0.0a0
+git+https://github.com/Rapptz/asqlite
 astunparse==1.6.3
 async-timeout==4.0.3
 attrs==23.2.0
