@@ -75,7 +75,7 @@ class RCONLogin(discord.ui.Modal):
             e = discord.Embed(description=f"{get_emoji('failure')} The RCON password is invalid. You have {tries_left} attempts left.", color=discord.Color.red())
             await interaction.edit_original_response(content=None, embed=e)
         except RCONDisabled: 
-            e = discord.Embed(description=f"{get_emoji('failure')} RCON is disabled in this server.", color=discord.Color.red())
+            e = discord.Embed(description=f"{get_emoji('failure')} RCON is disabled in this server or request timed out waiting for a response.", color=discord.Color.red())
             await interaction.edit_original_response(content=None, embed=e)
         except query.ServerOffline:
             e = discord.Embed(description=f"{get_emoji('failure')} The server didn't respond after 3 attempts.", color=discord.Color.red())
@@ -116,7 +116,7 @@ class RCONCommand(discord.ui.Modal):
             e = discord.Embed(description=f"{get_emoji('failure')} The server didn't respond after 3 attempts.", color=discord.Color.red())
             await interaction.edit_original_response(content=None, embed=e)
         except RCONDisabled: # Might be because of high latency or other reasons, catch the error
-            e = discord.Embed(description=f"{get_emoji('timeout')} Timed out waiting for a response from the server. The potential error could be that {self.get_potential_error(command)}", color=discord.Color.red())
+            e = discord.Embed(description=f"{get_emoji('timeout')} Timed out waiting for a response from the server.{self.get_potential_error(command)}", color=discord.Color.red())
             await interaction.edit_original_response(content=None, embed=e)       
         else:
             e = discord.Embed(
@@ -133,19 +133,21 @@ class RCONCommand(discord.ui.Modal):
             await interaction.edit_original_response(content=None, embed=e)
 
     def get_potential_error(self, command: str): # This function is used to get the potential error from the server when no response is received, i.e. RCONDisabled is raised
-        error = ""
+        error = " The potential error could be that "
 
         if command == "players": # players will receive no response when no players are online
-            error = "no players are online."
+            error += "no players are online."
 
-        if command == "kick": # kick will receive no response when the playerid given is not active
-            error = "an invalid player id was provided."
+        elif command == "kick": # kick will receive no response when the playerid given is not active
+            error += "an invalid player id was provided."
 
-        if command == "ban": # same thing for ban
-            error = "an invalid player id was provided."
+        elif command == "ban": # same thing for ban
+            error += "an invalid player id was provided."
+
+        else:
+            return ""
 
         return error
-
 
 class RCON(commands.GroupCog, name="rcon", description="All the RCON commands lie under this group."):
     def __init__(self, bot: commands.Bot):
@@ -165,7 +167,7 @@ class RCON(commands.GroupCog, name="rcon", description="All the RCON commands li
             self.login_tries[guild.id][user.id] = 1
 
         if self.login_tries[guild.id][user.id] == 3:
-
+            
             async def reset_login_tries(guild: discord.Guild, user: discord.Member):
                 await asyncio.sleep(3000)
                 self.login_tries[guild.id][user.id] = 0
@@ -257,10 +259,10 @@ class RCON(commands.GroupCog, name="rcon", description="All the RCON commands li
 
         await interaction.response.send_modal(command)
 
-    @app_commands.command(name="whitelist", description="Whitelist a user to execute RCON commands.")
-    @app_commands.describe(member="The user to whitelist.")
-    async def rcon_whitelist(self, interaction: discord.Interaction, member: discord.Member):
-        await interaction.response.send_message("This feature is yet to be implemented.")
+#    @app_commands.command(name="whitelist", description="Whitelist a user to execute RCON commands.")
+#    @app_commands.describe(member="The user to whitelist.")
+#    async def rcon_whitelist(self, interaction: discord.Interaction, member: discord.Member):
+#        await interaction.response.send_message("This feature is yet to be implemented.")
 
 async def setup(bot: commands.Bot):
     await bot.add_cog(RCON(bot))
