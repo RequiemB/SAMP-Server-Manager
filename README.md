@@ -1,6 +1,6 @@
 # SAMP-Server-Manager
 
-A Discord Bot to get SA-MP server information and send RCON commands written in Python.
+A Discord Bot to get SA-MP server information and execute RCON commands.
 
 You can use the [invite link](https://discord.com/api/oauth2/authorize?client_id=740603763118702662&permissions=414464723008&scope=bot%20applications.commands) to invite the bot to your server.
 
@@ -45,7 +45,7 @@ In order to host your own instance of the bot, you have to create a Bot account.
 
 ## Configuring the Bot
 
-In order to configure the bot, you need to have the repository in your PC. You can get it by cloning the repository. Open your terminal ([Git Bash](https://git-scm.com/downloads) is recommended) and put enter the following shell code:
+In order to configure the bot, you need to have the repository in your PC. You can get it by cloning the repository. Open your terminal ([Git Bash](https://git-scm.com/downloads) is recommended) and enter the following shell code:
 
 ```sh
 git clone https://www.github.com/RequiemB/SAMP-Server-Manager.git
@@ -63,30 +63,36 @@ It should be cloned into your PC now (or you can manually download it).
  
 * Now, open `src/helpers/config.py` and edit it as you'd like.
 ```python
-PREFIX = "." # The prefix to use
-OWNER_IDS = [] # Your ID here
-reactionSuccess = "" # The emoji to use when a command fails
-reactionFailure = "" # The emoji to use when a command fails
+OWNER_IDS = [] # Your Discord ID, or you can leave it blank
+PREFIX = "." # Prefix to use , this is only used for the syncing command
+
+REACTION_FAILURE = "" # The emoji to use if an interaction fails, should be in the <name:id> format.
+REACTION_SUCCESS = "" # The emoji to use if an interaction succeeds, should be in the <name:id> format.
+REACTION_TIMEOUT = "" # The emoji used in case of a timeout
+
+# Default emojis to be used if the custom ones aren't provided
+
+DEFAULT_REACTION_SUCCESS = '\U00002705'
+DEFAULT_REACTION_FAILURE = '\U0000274c'
+DEFAULT_REACTION_TIMEOUT = '\U000023f3'
+
+BUG_REPORT_CHANNEL = 0 # The ID of the channel that will receive bug reports
 ```
 Note that emoji ids should be in the `<name:id>` format.
-After editing it, you should have a config.py as follows:
-![img](https://imgur.com/oDEgNfs.png)
-This is only an example, you should replace it with your configuration.
 You've successfully configured the bot now.
 
 (It really doesn't matter if you don't have a prefix set as the bot runs on application commands.)
 
 ## Running the Bot
 
-After configuration the bot, you have to run it. For that, go to your shell window and run the following shell code:
+After finishing the configuration of the bot, you have to run it. For that, go to your shell window and run the following shell code:
 
+(The shell's location should be at the main folder.)
 ```sh
 pip install -r requirements.txt
 cd src
 python main.py
 ```
-
-(The shell's location should be at the main folder now.)
 
 If your bot comes online, you've successfully hosted the bot. If it doesn't, you can create an [issue](https://www.github.com/RequiemB/SAMP-Server-Manager/issues) with your problem.
 
