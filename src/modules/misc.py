@@ -30,7 +30,7 @@ class Misc(commands.Cog):
 
         e.add_field(name="Bug Report", value=f"```{bug}```")
         await channel.send(embed=e)
-        e = discord.Embed(description=f"{get_emoji('success')} Your bug report has been sent successfully.", color=discord.Color.green())
+        e = discord.Embed(description=f"{get_emoji('success')} Your bug report has been sent successfully. Join the [support server](https://discord.gg/z9j2kb9kB3) to know the status.", color=discord.Color.green())
         await interaction.response.send_message(embed=e)
     
 async def setup(bot: commands.Bot):

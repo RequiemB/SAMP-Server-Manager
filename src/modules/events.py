@@ -148,9 +148,19 @@ class Config(discord.ui.View):
                 
                 if channel is None:
                     e.description = f"{get_emoji('failure')} An error occured while attempting to fetch the channel. Try again and if the issue still persists, try another channel and make sure I have permissions to view it."
+                    e.color = discord.Color.red()
                     await interaction.followup.send(embed=e, ephemeral=True)
                     return
-                    
+                
+            try:
+                message = await channel.send("This is a test message. Ignore it.")
+                await message.delete()
+            except discord.Forbidden:
+                e.description = f"{get_emoji('failure')} An error occured while attempting to send a message to the channel. Ensure that I have the necessary permissions to send messages in that channel."
+                e.color = discord.Color.red()
+                await interaction.followup.send(embed=e, ephemeral=True)
+                return
+                
             async with interaction.client.pool.acquire() as conn:
                 await conn.execute("UPDATE query SET channel_id = ? WHERE guild_id = ?", (_id, interaction.guild.id,))
                 await conn.commit()
@@ -182,6 +192,8 @@ class Events(commands.Cog):
             await conn.execute("INSERT INTO query (guild_id) VALUES (?)", (guild.id,))
             await conn.commit()
 
+        channel = None
+
         if guild.system_channel is not None:
             channel = guild.system_channel
         else:
@@ -194,7 +206,7 @@ class Events(commands.Cog):
 
         e = discord.Embed(
             title = self.bot.user.name,
-            description = "Thanks for inviting me to this guild! You can now get information about your SA-MP server and even set a channel to send the information in a given interval.\n\nYou need to do some basic configuration to access all the bot's features. They are listed below.\nYou can set them now by using the buttons. It's recommended to configure it now.",
+            description = "Thanks for inviting me to this guild! You can now get information about your SA-MP server and even set a channel to send the information in a given interval.\n\nYou need to do some basic configuration to access all the bot's features. They are listed below.\nYou can set them now by using the buttons. It's recommended to configure it now.\nJoin the [support server](https://discord.gg/z9j2kb9kB3) if you require help.",
             color = discord.Color.blue(),
             timestamp = datetime.now()
         )
@@ -213,7 +225,6 @@ class Events(commands.Cog):
 
     @commands.Cog.listener()
     async def on_guild_remove(self, guild: discord.Guild):
-        query = f"DELETE FROM query WHERE guild_id = {guild.id}"
         async with self.bot.pool.acquire() as conn:
             await conn.execute("DELETE FROM query WHERE guild_id = ?", (guild.id,))
             await conn.commit()

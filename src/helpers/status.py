@@ -14,6 +14,7 @@ class Status:
         self.status_messages = {} 
         self.tasks = {}
         self.query = bot.query
+        self.global_running = False
 
     async def _get_status(self, host, port, channel_id, guild_id):
         try:
@@ -40,8 +41,11 @@ class Status:
 
         e = _utils.make_svinfo_embed(host, port, data)
 
-        message = await channel.send(embed=e)
-        self.status_messages[guild_id] = message
+        try:
+            message = await channel.send(embed=e)
+            self.status_messages[guild_id] = message
+        except:
+            pass
     
     def retrieve_config_from_data(self, data):
         guild_id = data[0]
@@ -66,12 +70,16 @@ class Status:
 
     async def start_status_global(self):
 
+        if self.global_running:
+            for guild_id in self.tasks:
+                if self.tasks[guild_id].is_running():
+                    self.tasks[guild_id].cancel()
+
         async with self.bot.pool.acquire() as conn:
             res = await conn.fetchall("SELECT * FROM query")
 
-        for index in res:
-            
-            guild_id, ip, port, interval, channel_id = self.retrieve_config_from_data(index)
+        for guild_data in res:
+            guild_id, ip, port, interval, channel_id = self.retrieve_config_from_data(guild_data)
 
             @tasks.loop(minutes=10.0, reconnect=True)
             async def get_status(ip, port, channel_id, guild_id):
@@ -85,6 +93,8 @@ class Status:
                 self.tasks[guild_id] = get_status
                 self.tasks[guild_id].change_interval(minutes=interval)
                 self.tasks[guild_id].start(ip, port, channel_id, guild_id)
+
+        self.global_running = True
                 
     async def start_status_with_guild(self, guild):
 
