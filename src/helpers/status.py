@@ -1,6 +1,8 @@
 import discord
 from discord.ext import tasks
 
+import traceback
+
 from helpers import (
     utils as _utils,
 )
@@ -22,7 +24,7 @@ class Status:
                 message = self.status_messages[guild_id]
                 await message.delete()
         except:
-            pass
+            traceback.print_exc()
 
         channel = self.bot.get_channel(channel_id)
 
@@ -45,7 +47,7 @@ class Status:
             message = await channel.send(embed=e)
             self.status_messages[guild_id] = message
         except:
-            pass
+            traceback.print_exc()
     
     def retrieve_config_from_data(self, data):
         guild_id = data[0]
@@ -69,7 +71,6 @@ class Status:
         return guild_id, ip, port, interval, channel_id
 
     async def start_status_global(self):
-
         if self.global_running:
             for guild_id in self.tasks:
                 if self.tasks[guild_id].is_running():
