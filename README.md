@@ -62,22 +62,7 @@ It should be cloned into your PC now (or you can manually download it).
 * Replace `<YOUR-TOKEN-HERE>` with the newly created Bot's token. ([How to get Discord Bot Token](https://www.writebots.com/discord-bot-token/))
  
 * Now, open `src/helpers/config.py` and edit it as you'd like.
-```python
-OWNER_IDS = [] # Your Discord ID, or you can leave it blank
-PREFIX = "." # Prefix to use , this is only used for the syncing command
 
-REACTION_FAILURE = "" # The emoji to use if an interaction fails, should be in the <name:id> format.
-REACTION_SUCCESS = "" # The emoji to use if an interaction succeeds, should be in the <name:id> format.
-REACTION_TIMEOUT = "" # The emoji used in case of a timeout
-
-# Default emojis to be used if the custom ones aren't provided
-
-DEFAULT_REACTION_SUCCESS = '\U00002705'
-DEFAULT_REACTION_FAILURE = '\U0000274c'
-DEFAULT_REACTION_TIMEOUT = '\U000023f3'
-
-BUG_REPORT_CHANNEL = 0 # The ID of the channel that will receive bug reports
-```
 Note that emoji ids should be in the `<name:id>` format.
 You've successfully configured the bot now.
 
