@@ -208,7 +208,7 @@ class Server(commands.Cog):
 
     server = app_commands.Group(name="server", description="All the server commands lie under this group.", guild_only=True)
         
-    @server.command(name="get", description="Gets the information for the SA-MP server set in this guild.", extras={"cog": "Server"})
+    @server.command(name="get", description="Queries the information from the server set in this guild and displays it in an embed.", extras={"cog": "Server"})
     async def server_get(self, interaction: discord.Interaction[QueryBot]) -> None:
         await interaction.response.defer()
 
@@ -241,11 +241,12 @@ class Server(commands.Cog):
         e, view = _utils.make_svinfo_embed(data) 
         await interaction.followup.send(embed=e, view=view)
 
-    @server.command(name="set", description="Sets a SA-MP server for this guild.", extras={"cog": "Server"})
+    @server.command(name="set", description="Configures a SA-MP/OMP game server for the guild.", extras={"cog": "Server", "ip": ['51.228.224.222:7777', '144.76.57.59:9863']})
     @app_commands.describe(
-        ip="The IP address of the SA-MP server. Example: 51.228.54.22:7777"
+        ip="The IP address of the SA-MP server."
     )
     async def server_set(self, interaction: discord.Interaction[QueryBot], ip: str) -> None:
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='dailystats'"
         assert type(interaction.user) == discord.Member and interaction.guild # to avoid type-hinting errors
 
         if not interaction.user.guild_permissions.manage_guild:
@@ -322,10 +323,10 @@ class Server(commands.Cog):
             else:
                 self.bot.server_data[interaction.guild.id] = data
 
-    @server.command(name="channel", description="Sets the channel in which the bot updates the SA-MP server information.", extras={"cog": "Server"})
+    @server.command(name="channel", description="Sets the channel in which the bot updates the SA-MP server information.", extras={"cog": "Server", "interval": ["6m", "20m", "30m", "15m"]})
     @app_commands.describe(
         channel="The channel in which the bot should update the SA-MP server info.",
-        interval="The interval at which the info should be sent. Must be higher than 5m and lower than 30m. Example usage: 5m for 5 minutes, 25m for 25 minutes."
+        interval="The interval at which the info should be sent. Must be higher than 5m and lower than 30m."
     )
     async def server_channel(self, interaction: discord.Interaction[QueryBot], channel: discord.TextChannel, interval: Optional[str] = None) -> None:
         assert type(interaction.user) == discord.Member and interaction.guild is not None
@@ -382,9 +383,9 @@ class Server(commands.Cog):
         
         await interaction.response.send_message(embed=e)
 
-    @server.command(name="interval", description="Sets the interval at which the info should be sent.", extras={"cog": "Server"})
+    @server.command(name="interval", description="Sets the interval at which the info should be sent.", extras={"cog": "Server", "interval": ["6m", "20m", "30m", "15m"]})
     @app_commands.describe(
-        interval="The interval at which the info should be sent. Must be higher than 5m and lower than 30m. Example usage: 5m for 5 minutes, 25m for 25 minutes."
+        interval="The interval at which the info should be sent. Must be higher than 5m and lower than 30m."
     )
     async def server_interval(self, interaction: discord.Interaction[QueryBot], interval: str) -> None:
         assert type(interaction.user) is discord.Member and interaction.guild is not None
@@ -498,7 +499,7 @@ class Server(commands.Cog):
 
         await interaction.followup.send(embed=e)        
 
-    @server.command(name="chart", description="Fetches the chart of the server activity based on the arguments passed.")
+    @server.command(name="chart", description="Fetches the chart of the server activity based on the arguments passed.", extras={"month": ['January', 'March', 'November', 'August']})
     @app_commands.describe(month="The month from which the chart should be made. Leave it empty to get the data for this month. All month names are valid. E.g. January, March, November.")
     async def server_chart(self, interaction: discord.Interaction[QueryBot], month: Optional[str] = None) -> None:
         assert interaction.guild
@@ -605,7 +606,7 @@ class Server(commands.Cog):
                 app_commands.Choice(name=month, value=month) for month in _utils.MONTHS[:index+1] if month.lower() in current.lower()
             ]
         
-    @app_commands.command(name="status", description="Gets the status of any SA-MP/OMP game server.", extras={"Cog": "Server"})
+    @app_commands.command(name="status", description="Gets the status of any SA-MP/OMP game server.", extras={"Cog": "Server", "ip": ['144.76.57.59:9863', '46.183.184.33:7778']})
     @app_commands.describe(ip="The IP address of the server.")
     async def status(self, interaction: discord.Interaction[QueryBot], ip: str) -> None:
         if not _utils.is_ip(ip):

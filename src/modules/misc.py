@@ -34,7 +34,7 @@ class HelpSelect(discord.ui.Select):
         await self.view.select_callback(interaction, self.values[0]) # type: ignore # This is implemented in the View
 
 class HelpPaginator(discord.ui.View):
-    def __init__(self, bot: QueryBot, *, home_embed: discord.Embed) -> None:
+    def __init__(self, bot: QueryBot, *, home_embed: Optional[discord.Embed] = None) -> None:
         super().__init__(timeout=300)
         self.add_item(HelpSelect(bot))
 
@@ -82,7 +82,7 @@ class HelpPaginator(discord.ui.View):
 
             e = discord.Embed(
                 title = f"{_utils.get_cog_emoji(name)} {name} Commands",
-                description = f"Use {await self.bot.tree.find_mention_for('help')} [command] for help with a specific command. (soon to be implemented)\n\nIf a parameter is in the format **<parameter>**, that parameter is **required.**\nIf a parameter is in the format **[parameter]**, that parameter is **not required**.",
+                description = f"Use {await self.bot.tree.find_mention_for('help')} [command] for help with a specific command.\n\nIf a parameter is in the format **<parameter>**, that parameter is **required.**\nIf a parameter is in the format **[parameter]**, that parameter is **not required**.",
                 color = discord.Color.blue(),
                 timestamp = discord.utils.utcnow()
             )
@@ -179,6 +179,42 @@ class Misc(commands.Cog):
         self.emoji = _utils.get_result_emoji()
         self.query = self.bot.query
 
+    def get_command_help(self, command_str: str, *, group_str: Optional[str] = None) -> Optional[discord.Embed]:
+        if group_str:
+            group = self.bot.tree.get_command(group_str)
+            if not group or not isinstance(group, app_commands.Group):
+                return None
+            
+            command = group.get_command(command_str)
+
+        else:
+            command = self.bot.tree.get_command(command_str)
+
+        if not command or isinstance(command, app_commands.Group):
+            return None
+        
+        e = discord.Embed(
+            title = f"Help for /{command.qualified_name}",
+            color = discord.Color.blue(),
+            timestamp = discord.utils.utcnow()
+        )
+
+        e.description = command.description if command.description else "No description was provided."
+
+        e.description += "\n## Arguments"
+        if command.parameters:
+            for param in command.parameters:
+                e.description += f"\n* {param.name}\nRequired: **{param.required}**.\nDescription: {param.description}\n"
+                try:
+                    e.description += f"Examples: **{', '.join(command.extras[param.name])}**.\n"
+                except KeyError:
+                    pass
+
+        else:
+            e.description += "\nThis command requires no arguments."
+
+        return e
+
     @app_commands.command(name="bugreport", description="Use this command to report a bug found in the bot.", extras={"Cog": "Misc"})
     @app_commands.describe(bug="The bug that was found.")
     async def bugreport(self, interaction: discord.Interaction[QueryBot], *, bug: str) -> None:
@@ -210,15 +246,35 @@ class Misc(commands.Cog):
             await interaction.response.send_message(embed=e)
 
     @app_commands.command(name="help", description="Shows the help for the bot.")
-    async def help(self, interaction: discord.Interaction[QueryBot]) -> None:
+    @app_commands.describe(command="The command to display help for. If this isn't specified, then the global help command is shown.")
+    async def help(self, interaction: discord.Interaction[QueryBot], *, command: Optional[str] = None) -> None:
         assert interaction.guild and self.bot.user
+
+        if command:
+            cmd = command.split()
+            if len(cmd) >= 2: # It's a group
+                e = self.get_command_help(cmd[1], group_str=cmd[0])
+            else:
+                e = self.get_command_help(cmd[0])
+
+            if not e:
+                await interaction.response.send_message(embed=discord.Embed(description=f"{_utils.get_result_emoji('failure')} Command **{command}** was not found.", color=discord.Color.red()))
+                return
+
+            view = HelpPaginator(self.bot) # just for good looking embed
+            for item in view.children:
+                if isinstance(item, (discord.ui.Button, discord.ui.Select)): 
+                    item.disabled = True
+
+            await interaction.response.send_message(embed=e, view=view)
+            return
 
         e = discord.Embed(
             title = self.bot.user.name + " Help",
             description = cleandoc(f"""
                 Welcome to the help menu of the bot.
                                    
-                Use {_utils.command_mention_from_interaction(interaction)} [command] for help with a specific command. (soon to be implemented)
+                Use {_utils.command_mention_from_interaction(interaction)} [command] for help with a specific command.
                 Use the drop-down menu below to get help of commands in different categories.
             """),
             color = discord.Color.blue(),
@@ -248,6 +304,36 @@ class Misc(commands.Cog):
 
         await interaction.response.send_message(embed=e, view=view)
         view.message = await interaction.original_response()
+
+    @help.autocomplete('command')
+    async def command_autocomplete(self, interaction: discord.Interaction[QueryBot], current: str) -> List[app_commands.Choice]:
+        commands: List[str] = []
+
+        for command in interaction.client.tree.get_commands():
+            if len(commands) > 25:
+                break
+
+            if command.name == "help": # Ignore help
+                continue
+            
+            if isinstance(command, app_commands.Group):
+                if len(commands) > 25:
+                    break
+
+                commands.extend([cmd.qualified_name for cmd in command.walk_commands()]) 
+                continue
+
+            if command:
+                commands.append(command.name)
+
+        if not current: # User didn't type anything, so show all the commands
+            return [
+                app_commands.Choice(name=cmd, value=cmd) for cmd in commands
+            ]
+        else:
+            return [
+                app_commands.Choice(name=cmd, value=cmd) for cmd in commands if current.lower() in cmd.lower()
+            ]
     
 async def setup(bot: commands.Bot) -> None:
     await bot.add_cog(Misc(bot))

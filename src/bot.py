@@ -113,7 +113,7 @@ class QueryBotTree(app_commands.CommandTree):
             await self.bot.log_error_via_webhook("on_app_command_error", tb)
         except Exception: # If this fails, it already logged to console so ignore
             pass
-
+        
         await interaction.response.send_message("An error occured while executing your command. If this persists, join the [support server](https://discord.gg/GK8wPNjJXy).")
 
 class QueryBot(commands.Bot):
