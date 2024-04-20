@@ -1,67 +1,14 @@
+from bot import QueryBot
+
 import discord
 from discord.ext import commands
-from discord import app_commands
 
 import traceback
 import asyncio
 import os
-import logging
 import trio_asyncio
-import asqlite
 
-from helpers import (
-    config,
-    log, 
-    status,
-    query
-)
-from pkgutil import iter_modules
 from dotenv import load_dotenv
-
-logger = logging.getLogger("discord")
-logger.setLevel(logging.INFO)
-logger.propagate = False
-
-handler = logging.StreamHandler()
-handler.setLevel(logging.INFO)
-handler.setFormatter(log.Logger()) 
-logger.addHandler(handler)
-
-class QueryBot(commands.Bot):
-    def __init__(self) -> None:
-        self.query = query.Query(self)
-        self._extensions = [m.name for m in iter_modules(['modules'], prefix='modules.')]
-        self._extensions.append("jishaku")
-        self.logger = logger
-        self._status = status.Status(self)
-        self.rcon_logged = {}
-        self.pool = None
-
-        super().__init__(
-            command_prefix = config.PREFIX,
-            intents = discord.Intents.all(),
-            owner_ids = config.OWNER_IDS,
-            status=discord.Status.dnd, 
-            activity=discord.Activity(name="your SAMP server", type=discord.ActivityType.watching),
-        )
-
-    async def on_ready(self) -> None:
-        print(f"Logged in as {self.user}.", flush=True)
-
-    async def setup_hook(self) -> None:
-        self.pool = await asqlite.create_pool("./database/query.db")
-        self.logger.info("Created database connection pool.")
-
-        self.command_list = await self.tree.fetch_commands()
-        
-        for extension in self._extensions:
-            try:
-                await self.load_extension(extension)
-            except Exception as e:
-                self.logger.error(f"Unable to load extension {extension}.")
-                traceback.print_exc()
-            else:
-                self.logger.info(f"Loaded extension {extension}.")
 
 bot = QueryBot()
 
@@ -69,17 +16,27 @@ bot = QueryBot()
 @commands.is_owner()
 async def sync(ctx: commands.Context) -> None:
     try: 
-        bot.command_list = await bot.tree.sync()
-
-        await ctx.send(f"Synced {len(bot.command_list)} commands.")
-    except:
-        pass
+        synced = await bot.tree.sync()
+        await ctx.send(f"Synced {len(synced)} commands.")
+    except Exception:
+        e = discord.Embed(
+            title = "Exception",
+            color = discord.Color.red(),
+            timestamp = discord.utils.utcnow()
+        )
+        e.description = f"```py\n{traceback.format_exc()}```"
+        await ctx.send(embed=e)
 
 load_dotenv()
 
 async def setup() -> None:
-    async with bot:
-        await bot.start(os.getenv('TOKEN'))
+    bot.setup_logger()
+    token = os.getenv('TOKEN')
+    if token:
+        async with bot:
+            await bot.start(token)
+    else:
+        raise RuntimeError("No login token was provided in the env file.")
 
 async def cleanup() -> None:
     async with bot:
@@ -87,14 +44,23 @@ async def cleanup() -> None:
 
     bot.logger.info("Terminating all processes and stopping the loop...")
 
-    await bot.pool.close()
+    # Check for running tasks before closing the pool
+    for guild_id in bot._status.guild_status_tasks:
+        if bot._status.guild_status_tasks[guild_id].is_running():
+            bot._status.guild_status_tasks[guild_id].cancel()
+
+    if bot._status.update_stats.is_running():
+        bot._status.update_stats.stop()
 
     await asyncio.sleep(1)
 
+    await bot.pool.close()
+    await bot._session.close()
+
 async def main() -> None:
     try:
-        await trio_asyncio.aio_as_trio(setup)()
+        await trio_asyncio.aio_as_trio(setup)() # type: ignore # The module isn't typed properly
     except KeyboardInterrupt:
-        await trio_asyncio.aio_as_trio(cleanup)()
+        await trio_asyncio.aio_as_trio(cleanup)() # type: ignore
 
-trio_asyncio.run(main)
+trio_asyncio.run(main) # type: ignore
