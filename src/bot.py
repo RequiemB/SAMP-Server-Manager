@@ -114,7 +114,10 @@ class QueryBotTree(app_commands.CommandTree):
         except Exception: # If this fails, it already logged to console so ignore
             pass
         
-        await interaction.response.send_message("An error occured while executing your command. If this persists, join the [support server](https://discord.gg/GK8wPNjJXy).")
+        if not interaction.response.is_done():
+            await interaction.response.send_message("An error occured while executing your command. If this persists, join the [support server](https://discord.gg/GK8wPNjJXy).")
+        else:
+            await interaction.followup.send("An error occured while executing your command. If this persists, join the [support server](https://discord.gg/GK8wPNjJXy).")
 
 class QueryBot(commands.Bot):
     def __init__(self) -> None:
