@@ -20,8 +20,6 @@ if TYPE_CHECKING:
 
 MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"]
 
-#ip_re = re.compile(r"^((?:(?:\d|[1-9]\d|1\d\d|2[0-4]\d|25[0-5])(?:\.(?!\:)|)){4})\:(?!0)(\d{1,4}|[1-5]\d{4}|6[0-4]\d{3}|65[0-4]\d{2}|655[0-2]\d|6553[0-5])$")
-
 def get_uptime_emoji(emoji: Literal['GREEN', 'ORANGE', 'RED']) -> str:
     match emoji:
         case 'GREEN':
