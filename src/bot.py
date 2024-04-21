@@ -142,6 +142,7 @@ class QueryBot(commands.Bot):
             tree_cls=QueryBotTree
         )
         self.tree: QueryBotTree 
+        self.remove_command("help")
 
     async def on_ready(self) -> None:
         print(f"Logged in as {self.user}.", flush=True)
