@@ -19,7 +19,7 @@ if TYPE_CHECKING:
     from sqlite3 import Row
     from samp_query import ServerInfo
 
-DAILY_STATS_INTERVAL = 2 # The interval at which to get the daily stats of the server (in minutes)
+DAILY_STATS_INTERVAL = 60 # The interval at which to get the daily stats of the server (in minutes)
 
 class Status:
     def __init__(self, bot):
