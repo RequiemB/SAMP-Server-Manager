@@ -44,11 +44,10 @@ def is_ip(address: str) -> bool:
     try:
         ip, port = address.split(":")
         octets = map(int, ip.split("."))
+        octets = [i for i in octets]
         port = int(port)
     except ValueError:
         return False
-    
-    octets = [i for i in octets]
 
     return all([
         len(octets) == 4,

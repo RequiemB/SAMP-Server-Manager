@@ -60,6 +60,7 @@ class ServerModal(discord.ui.Modal):
         await self.message.edit(embed=self.embed, view=self.__view)
 
         await interaction.response.send_message(embed=e, ephemeral=True)
+        await self.__view._status.start_stats_update_with_guild(interaction.guild)
 
         if self.__view._channel and self.__view._interval:
             self.__view.stop()
@@ -291,6 +292,12 @@ class Events(commands.Cog):
             if self.bot._status.guild_status_tasks[guild.id] is not None:
                 if self.bot._status.guild_status_tasks[guild.id].is_running():
                     self.bot._status.guild_status_tasks[guild.id].cancel()
+        except KeyError:
+            pass
+
+        try:
+            if self.bot._status.update_stats_tasks[guild.id].is_running():
+                self.bot._status.guild_status_tasks[guild.id].cancel()
         except KeyError:
             pass
 

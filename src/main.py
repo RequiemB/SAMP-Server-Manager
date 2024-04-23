@@ -49,9 +49,6 @@ async def cleanup() -> None:
         if bot._status.guild_status_tasks[guild_id].is_running():
             bot._status.guild_status_tasks[guild_id].cancel()
 
-    if bot._status.update_stats.is_running():
-        bot._status.update_stats.stop()
-
     await asyncio.sleep(1)
 
     await bot.pool.close()

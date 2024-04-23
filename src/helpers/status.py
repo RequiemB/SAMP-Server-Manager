@@ -19,7 +19,7 @@ if TYPE_CHECKING:
     from sqlite3 import Row
     from samp_query import ServerInfo
 
-DAILY_STATS_INTERVAL = 60 # The interval at which to get the daily stats of the server (in minutes)
+DAILY_STATS_INTERVAL = 2 # The interval at which to get the daily stats of the server (in minutes)
 
 class Status:
     def __init__(self, bot):
@@ -29,6 +29,7 @@ class Status:
 
         self.status_messages: Dict[int, discord.Message] = {} 
         self.guild_status_tasks: Dict[int, tasks.Loop] = {}
+        self.update_stats_tasks: Dict[int, tasks.Loop] = {}
         self.last_dailystats_update: Dict[int, datetime] = {}
         self._resend_next_iter: Dict[int, bool] = {} 
 
@@ -76,11 +77,7 @@ class Status:
 
         return message
 
-    @tasks.loop(minutes=2.0, reconnect=True)
-    async def update_stats(self):
-        """The task that updates the server stats."""
-        finished_servers = [] # List of servers that have been already updated
-
+    async def start_global_stats_update(self) -> None:
         try:
             async with self.bot.pool.acquire() as conn:
                 res = await conn.fetchall("SELECT guild_id, ip, port FROM query")
@@ -88,16 +85,19 @@ class Status:
             self.bot.logger.error("Exception occured in update_stats", exc_info=exc)
             return 
         
+        finished_servers = [] # List of servers that already have tasks started
+        
         for guild_data in res:
-            try:
-                guild_id, ip, port = guild_data[0], guild_data[1], guild_data[2]
+            guild_id, ip, port = guild_data[0], guild_data[1], guild_data[2]
 
-                if ip is None and port is None:
-                    continue
+            if ip is None and port is None:
+                continue
 
-                if (ip, port) in finished_servers:
-                    continue
+            if (ip, port) in finished_servers:
+                continue
 
+            @tasks.loop(seconds=60.0, reconnect=True)
+            async def update_stats(guild_id, ip, port):
                 is_server_active: bool = False
                 data: Dict[str, Union[str, int, ServerInfo]] = {}
 
@@ -112,7 +112,8 @@ class Status:
                 data["port"] = port
 
                 if is_server_active:
-                    await self.update_server_stats(data) # type: ignore
+                    await self.update_server_stats(data) 
+
                 try:
                     self.last_dailystats_update[guild_id]
                 except KeyError:
@@ -120,14 +121,60 @@ class Status:
                 else:
                     difference = datetime.now() - self.last_dailystats_update[guild_id]
                     minutes = divmod(difference.total_seconds(), 60)[0]
-                    if minutes >= DAILY_STATS_INTERVAL:
+                    if minutes >= (DAILY_STATS_INTERVAL - 1):
                         await self.update_daily_server_stats(data, is_server_active, guild_id)
 
-                finished_servers.append((ip, port))
                 self.bot.logger.info(f"Finished updating statistics of {ip}:{port}.")
-                                
-            except Exception: # An exception occured in a guild, catch it, log it to discord and then move on to the next guild
-                await self.bot.log_error_via_webhook("get_status", traceback.format_exc(), extra=f"in guild ID {guild_id}") # type: ignore
+
+            self.update_stats_tasks[guild_id] = update_stats
+            self.update_stats_tasks[guild_id].start(guild_id, ip, port)
+
+            finished_servers.append((ip, port))
+
+    async def start_stats_update_with_guild(self, guild: discord.Guild) -> None:
+        async with self.bot.pool.acquire() as conn:
+            res = await conn.fetchone("SELECT ip, port FROM query WHERE guild_id = ?", (guild.id,))
+
+        @tasks.loop(seconds=60.0, reconnect=True)
+        async def update_stats(guild_id, ip, port):
+            is_server_active: bool = False
+            data: Dict[str, Union[str, int, ServerInfo]] = {}
+
+            try:
+                data["info"] = await self.query.get_server_info(ip, port, retry=False)
+                is_server_active = True
+            except Exception as exc:
+                if not isinstance(exc, ServerOffline):
+                    traceback.print_exc()
+
+            data["ip"] = ip
+            data["port"] = port
+
+            if is_server_active:
+                await self.update_server_stats(data) 
+
+            try:
+                self.last_dailystats_update[guild_id]
+            except KeyError:
+                await self.update_daily_server_stats(data, is_server_active, guild_id)
+            else:
+                difference = datetime.now() - self.last_dailystats_update[guild_id]
+                minutes = divmod(difference.total_seconds(), 60)[0]
+                if minutes >= (DAILY_STATS_INTERVAL - 1):
+                    await self.update_daily_server_stats(data, is_server_active, guild_id)
+
+            self.bot.logger.info(f"Finished updating statistics of {ip}:{port}.")
+
+        try:
+            if self.update_stats_tasks[guild.id].is_running():
+                self.update_stats_tasks[guild.id].cancel()
+        except KeyError:
+            pass
+
+        ip, port = res
+
+        self.update_stats_tasks[guild.id] = update_stats
+        self.update_stats_tasks[guild.id].start(guild.id, ip, port)
 
     async def update_server_stats(self, data: Dict[str, str | int | ServerInfo]) -> None:
         async with self.bot.pool.acquire() as conn:
@@ -177,6 +224,7 @@ class Status:
             await conn.execute(query, params)
             await conn.commit()
 
+        self.bot.logger.warning(f"Updated daily stats in {guild_id}.")
         self.last_dailystats_update[guild_id] = datetime.now()
 
     async def send_offline_status(self, interval: int, channel_id: int, guild_id: int) -> None:

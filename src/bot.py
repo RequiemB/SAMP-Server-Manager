@@ -9,15 +9,13 @@ import asqlite
 import aiohttp
 import logging
 
-from struct import error as structerror
 from helpers import (
     config,
     status,
     query,
     utils,
     log,
-    chart,
-    ServerOffline
+    chart
 )
 from pkgutil import iter_modules
 from typing import Dict, Optional, Dict, List, TYPE_CHECKING
@@ -106,7 +104,7 @@ class QueryBotTree(app_commands.CommandTree):
         return f"</{_command.qualified_name}:{app_command_found.id}>"
 
     async def on_error(self, interaction: discord.Interaction[QueryBot], error: app_commands.AppCommandError, /) -> None:
-        self.bot.logger.error("Ignoring exception in on_app_command_error", exc_info=error)
+        self.bot.logger.error("Ignoring exception in on_error", exc_info=error)
         try:
             # Log the error in the console and discord
             tb = "".join(traceback.format_exception(exc=error)) # type: ignore
@@ -216,9 +214,8 @@ class QueryBot(commands.Bot):
     async def startup_task(self):      # The task which starts the all the tasks and auto-syncs the commands (optional)
         await self._status.start_global_status()
         self.logger.info("Global querying task was started.")
-        self._status.update_stats.add_exception_type(structerror, ServerOffline)
-        self._status.update_stats.start()
-        self.logger.info("update_stats task was started.")
+        await self._status.start_global_stats_update()
+        self.logger.info("Global update task was started.")
 
 #       Uncomment these lines if you want commands to be auto-synced (not recommended, you can use the text command to auto-sync)
 #        self.command_list = await self.tree.sync()

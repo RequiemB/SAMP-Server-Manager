@@ -83,6 +83,7 @@ class Overwrite(discord.ui.View):
         except Exception:
             await interaction.client.log_error_via_webhook("server_set button confirm", traceback.format_exc(), extra=f"in guild ID {interaction.guild.id}")
 
+        await interaction.client._status.start_stats_update_with_guild(interaction.guild)
         await interaction.followup.send(embed=e)
 
         for button in self.children:
@@ -246,7 +247,6 @@ class Server(commands.Cog):
         ip="The IP address of the SA-MP server."
     )
     async def server_set(self, interaction: discord.Interaction[QueryBot], ip: str) -> None:
-        "SELECT name FROM sqlite_master WHERE type='table' AND name='dailystats'"
         assert type(interaction.user) == discord.Member and interaction.guild # to avoid type-hinting errors
 
         if not interaction.user.guild_permissions.manage_guild:
@@ -314,6 +314,7 @@ class Server(commands.Cog):
             except Exception:
                 traceback.print_exc()
 
+            await self._status.start_stats_update_with_guild(interaction.guild)
             await interaction.response.send_message(embed=e)
 
             try:
