@@ -67,6 +67,7 @@ async def set_up_database(conn: ProxiedConnection) -> None:
             channel_id INT,
             logs INT,
             message_id INT,
+            timezone CHAR(40),
             PRIMARY KEY (guild_id)
         );
 
@@ -79,6 +80,7 @@ async def set_up_database(conn: ProxiedConnection) -> None:
         );
 
         CREATE TABLE IF NOT EXISTS dailystats (
+            guild_id INT,
             ip CHAR(45),
             port SMALLINT,
             playercount SMALLINT,

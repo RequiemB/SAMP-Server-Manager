@@ -6,6 +6,8 @@ from discord import app_commands
 
 import traceback
 import asyncio
+import pytz
+import random
 
 from helpers import (
     utils as _utils,
@@ -21,6 +23,7 @@ if TYPE_CHECKING:
     from sqlite3 import Row
     from bot import QueryBot
     from helpers.chart import ChartData
+    from asqlite import ProxiedConnection
 
 class Overwrite(discord.ui.View):
     def __init__(self, ip: str, port: int, data: Row, author: discord.Member) -> None:
@@ -115,7 +118,7 @@ class ChartSelect(discord.ui.Select):
             placeholder = "Select a date",
             options = [
                 discord.SelectOption(label = "-".join(k[5:].split("-")[::-1]), value = k, emoji = "🗓️", description = f"Chart for the day of {'-'.join(k.split('-')[::-1])}") 
-                for k in data.keys() 
+                for i, k in enumerate(data.keys()) if i <= 24 
             ] if not disabled else [discord.SelectOption(label="Nothing")],
             row = 0,
             min_values = 1,
@@ -198,6 +201,58 @@ class ChartView(discord.ui.View):
     async def enter_date(self, interaction: discord.Interaction[QueryBot], button: discord.ui.Button) -> None:
         await interaction.response.send_modal(ChartModal(self.data))
 
+class TimezoneOverwrite(discord.ui.View):
+    def __init__(self, conn: ProxiedConnection, current_tz: str, new_tz: str) -> None:
+        self.conn: ProxiedConnection = conn
+        self.current_tz: str = current_tz
+        self.new_tz: str = new_tz
+        self.message: Optional[discord.Message] = None
+        super().__init__(timeout=60.0)
+
+    async def on_timeout(self) -> None:
+        for item in self.children:
+            if isinstance(item, discord.ui.Button):
+                item.disabled = True
+
+        if self.message:
+            await self.message.edit(view=self)
+
+    @discord.ui.button(label="Confirm", style=discord.ButtonStyle.green, emoji=_utils.get_result_emoji())
+    async def confirm(self, interaction: discord.Interaction[QueryBot], button: discord.ui.Button) -> None:
+        assert interaction.guild
+
+        try:
+            task = interaction.client._status.update_stats_tasks[interaction.guild.id]
+        except KeyError:
+            pass
+        else:
+            if task.is_running():
+                task.cancel()
+
+        await self.conn.execute("DELETE FROM dailystats WHERE guild_id = ?", (interaction.guild.id))
+        await self.conn.execute("UPDATE query SET timezone = ? WHERE guild_id = ?", (self.new_tz, interaction.guild.id))
+
+        e = discord.Embed(
+            description = f"{_utils.get_result_emoji()} Successfully changed timezone from **{self.current_tz}** to **{self.new_tz}**.",
+            color = discord.Color.green()
+        )
+        for item in self.children:
+            if isinstance(item, discord.ui.Button):
+                item.disabled = True
+
+        await interaction.response.send_message(embed=e)
+
+    @discord.ui.button(label="Cancel", style=discord.ButtonStyle.red, emoji=_utils.get_result_emoji('failure'))
+    async def cancel(self, interaction: discord.Interaction, button: discord.ui.Button) -> None:
+        await interaction.response.send_message("Successfully canceled the operation.")
+
+        for item in self.children:
+            if isinstance(item, discord.ui.Button):
+                item.disabled = True
+
+        if self.message:
+            await self.message.edit(view=self)
+
 class Server(commands.Cog):
     "Commands related to server status and more."
     def __init__(self, bot) -> None:
@@ -266,7 +321,7 @@ class Server(commands.Cog):
             return
 
         async with self.bot.pool.acquire() as conn:
-            res = await conn.fetchone("SELECT ip, port, interval, channel_id FROM query WHERE guild_id = ?", (interaction.guild.id,))
+            res = await conn.fetchone("SELECT ip, port, interval, channel_id, timezone FROM query WHERE guild_id = ?", (interaction.guild.id,))
 
         try:
             host, port = ip.split(":")
@@ -314,7 +369,9 @@ class Server(commands.Cog):
             except Exception:
                 traceback.print_exc()
 
-            await self._status.start_stats_update_with_guild(interaction.guild)
+            if res[4]: # res[4] = timezone
+                await self._status.start_stats_update_with_guild(interaction.guild)
+
             await interaction.response.send_message(embed=e)
 
             try:
@@ -535,7 +592,7 @@ class Server(commands.Cog):
             if month_int < 10:
                 month_int = f"0{month_int}"
 
-            res = await conn.fetchall(f"SELECT playercount, date, time FROM dailystats WHERE ip = ? AND port = ? AND date LIKE '{year_int}-{month_int}%'", (ip, port,))  
+            res = await conn.fetchall(f"SELECT playercount, date, time FROM dailystats WHERE guild_id = ? AND ip = ? AND port = ? AND date LIKE '{year_int}-{month_int}%'", (interaction.guild.id, ip, port,))  
 
             data = self.chart.chart_data_from_res(res) 
             if not data: # No entries
@@ -664,6 +721,70 @@ class Server(commands.Cog):
 
         e, view = _utils.make_svinfo_embed(data) 
         await interaction.followup.send(embed=e, view=view)
-    
+
+    @server.command(name="timezone", description="Sets a timezone for the server. This is required for chart data collection.")
+    @app_commands.describe(timezone="The timezone to use for the server. Write the continent name to get more accurate results.")
+    async def server_timezone(self, interaction: discord.Interaction[QueryBot], *, timezone: str) -> None:
+        assert interaction.guild and type(interaction.user) is discord.Member
+
+        if not interaction.user.guild_permissions.manage_guild:
+            e = discord.Embed(
+                description = f"{_utils.get_result_emoji('failure')} You require the **Manage Guild** permission in order to execute this command.",
+                color = discord.Color.red()
+            )
+            await interaction.response.send_message(embed=e)
+            return
+        
+        if timezone not in pytz.common_timezones:
+            e = discord.Embed(
+                description = f"{_utils.get_result_emoji('failure')} **{timezone}** is not a recognized timezone.",
+                color = discord.Color.red()
+            )
+            await interaction.response.send_message(embed=e)
+            return
+
+        async with self.bot.pool.acquire() as conn:
+            res = await conn.fetchone("SELECT ip, port, timezone FROM query WHERE guild_id = ?", (interaction.guild.id,))
+
+            if res[2]:
+                view = TimezoneOverwrite(conn, res[2], timezone)
+                e = discord.Embed(
+                    description = f"Are you sure you want to change the configured timezone for this server from **{res[2]}** to **{timezone}**.\n\n:warning: This will cause all chart data collected to be erased.",
+                    color = discord.Color.red()
+                )
+                await interaction.response.send_message(embed=e, view=view)
+                view.message = await interaction.original_response()
+            else:
+                await conn.execute("UPDATE query SET timezone = ? WHERE guild_id = ?", (timezone, interaction.guild.id))
+                await conn.commit()
+
+                e = discord.Embed(
+                    description = f"{_utils.get_result_emoji()} Successfully set the timezone for this guild to **{timezone}**.",
+                    color = discord.Color.green()
+                )
+                await interaction.response.send_message(embed=e)
+
+                if res[0] and res[1]:
+                    await interaction.client._status.start_stats_update_with_guild(interaction.guild)
+
+    @server_timezone.autocomplete('timezone')
+    async def timezone_autocomplete(self, interaction: discord.Interaction, current: str) -> List[app_commands.Choice]:
+        timezones = pytz.common_timezones
+        if not current:
+            selected_timezones = random.choices(timezones, k=25)
+            return [
+                app_commands.Choice(name=tz, value=tz) for tz in selected_timezones
+            ]
+        else:
+            choices = []
+            for tz in timezones:
+                if len(choices) == 25:
+                    break
+
+                if current.lower() in tz.lower():
+                    choices.append(app_commands.Choice(name=tz, value=tz))
+
+            return choices
+
 async def setup(bot: QueryBot) -> None:
     await bot.add_cog(Server(bot))

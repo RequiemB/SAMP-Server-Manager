@@ -4,6 +4,7 @@ import discord
 from discord.ext import tasks
 
 import traceback
+import pytz
 
 from helpers import utils as _utils
 from .query import ServerOffline
@@ -80,20 +81,15 @@ class Status:
     async def start_global_stats_update(self) -> None:
         try:
             async with self.bot.pool.acquire() as conn:
-                res = await conn.fetchall("SELECT guild_id, ip, port FROM query")
+                res = await conn.fetchall("SELECT guild_id, ip, port, timezone FROM query")
         except Exception as exc: # Database isn't properly set up, most likely
             self.bot.logger.error("Exception occured in update_stats", exc_info=exc)
             return 
         
-        finished_servers = [] # List of servers that already have tasks started
-        
         for guild_data in res:
-            guild_id, ip, port = guild_data[0], guild_data[1], guild_data[2]
+            guild_id, ip, port, timezone = guild_data[0], guild_data[1], guild_data[2], guild_data[3]
 
-            if ip is None and port is None:
-                continue
-
-            if (ip, port) in finished_servers:
+            if ip is None and port is None and timezone is None:
                 continue
 
             @tasks.loop(seconds=60.0, reconnect=True)
@@ -128,8 +124,6 @@ class Status:
 
             self.update_stats_tasks[guild_id] = update_stats
             self.update_stats_tasks[guild_id].start(guild_id, ip, port)
-
-            finished_servers.append((ip, port))
 
     async def start_stats_update_with_guild(self, guild: discord.Guild) -> None:
         async with self.bot.pool.acquire() as conn:
@@ -201,26 +195,33 @@ class Status:
             player_count = 0
             status = "offline"
 
-        now = datetime.now()
-        date = now.strftime("%Y-%m-%d")
-        time = now.strftime("%H:%M")
-
-        query = """
-            INSERT INTO dailystats (
-                ip,
-                port,
-                playercount,
-                date,
-                time,
-                status
-            )
-            VALUES (
-                ?, ?, ?, ?, ?, ?
-            )
-        """
-        params = (ip, port, player_count, date, time, status)
-
         async with self.bot.pool.acquire() as conn:
+            res = await conn.fetchone("SELECT timezone FROM query WHERE guild_id = ?", (guild_id))
+
+            try:
+                now = datetime.now(pytz.timezone(res[0]))
+            except pytz.UnknownTimeZoneError:
+                now = datetime.now()
+
+            date = now.strftime("%Y-%m-%d")
+            time = now.strftime("%H:%M")
+
+            query = """
+                INSERT INTO dailystats (
+                    guild_id,
+                    ip,
+                    port,
+                    playercount,
+                    date,
+                    time,
+                    status
+                )
+                VALUES (
+                    ?, ?, ?, ?, ?, ?, ?
+                )
+            """
+            params = (guild_id, ip, port, player_count, date, time, status)
+            
             await conn.execute(query, params)
             await conn.commit()
 

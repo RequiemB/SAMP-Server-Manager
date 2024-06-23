@@ -99,12 +99,6 @@ class Chart:
                 dates.append("-".join(date)) # Remove the year and put it in the format of DD-MM
                 player_counts.append(v.max_playercount)
 
-#            current = 15
-#            for x in range(20):
-#                dates.append(f"{current}-04")
-#                current += 1
-#                player_counts.append(random.choice([42, 12, 22, 1, 0, 29, 55, 23]))
-
             x_axis = dates
             x_label = "Dates"
         

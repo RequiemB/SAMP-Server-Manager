@@ -346,6 +346,7 @@ class Events(commands.Cog):
                 for c in channel.guild.channels: # Let the server moderators know that we don't have permissions
                     if isinstance(c, discord.TextChannel) and c.permissions_for(channel.guild.me).send_messages:
                         await c.send(f"My permissions to send messages in {channel.mention} was revoked. I can no longer update status in that channel. Set a new channel for status using the {await self.bot.tree.find_mention_for('server channel')} command.")
+                        break
 
     @commands.Cog.listener()
     async def on_guild_channel_update(self, before: discord.abc.GuildChannel, after: discord.abc.GuildChannel) -> None:
@@ -375,6 +376,7 @@ class Events(commands.Cog):
                 for channel in after.guild.channels: # Let the server moderators know that we don't have permissions
                     if isinstance(channel, discord.TextChannel) and channel.permissions_for(after.guild.me).send_messages:
                         await channel.send(f"My permissions to send messages in {after.mention} was revoked. I can no longer update status in that channel. Set a new channel for status using the {await self.bot.tree.find_mention_for('server channel')} command.")
-            
+                        break
+
 async def setup(bot: commands.Bot):
     await bot.add_cog(Events(bot))
