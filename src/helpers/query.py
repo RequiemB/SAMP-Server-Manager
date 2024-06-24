@@ -30,7 +30,7 @@ class Query:
 
         while (tries < 3): # Retrying thrice
             try:
-                with trio.fail_after(TIMEOUT - 2):
+                with trio.fail_after(TIMEOUT):
                     ping = await client.ping()
 
             except (trio.TooSlowError, ConnectionRefusedError, ConnectionResetError):
@@ -43,6 +43,11 @@ class Query:
             else:
                 return client # Return the client if the server is responsive so that the exception isn't raised
             
+        # Close the socket and delete the client if the server is offline
+        if client._socket: 
+            client._socket.close() 
+        del client
+
         raise ServerOffline(host, port)
 
     async def _get_server_data(self, host: str, port: int, *, retry: Optional[bool] = True) -> ServerData:
@@ -68,12 +73,21 @@ class Query:
             "rules": rules,
             "players": players
         }
-        
+
+        # Close the socket and delete the client after use
+        if client._socket: 
+            client._socket.close() 
+        del client
+
         return data
     
     async def _get_server_info(self, host: str, port: int, *, retry: bool = True) -> ServerInfo: # This is different from get_server_data as this only requests for info
         client = await self.connect(host, port, retry=retry)
         info = await client.info()
+
+        if client._socket: 
+            client._socket.close() 
+        del client
 
         return info
 
