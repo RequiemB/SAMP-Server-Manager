@@ -134,7 +134,7 @@ class QueryBot(commands.Bot):
         super().__init__(
             command_prefix = config.PREFIX,
             intents = self._intents,
-            owner_id = config.OWNER_IDS,
+            owner_ids = config.OWNER_IDS,
             status=discord.Status.dnd, 
             activity=discord.Activity(name="your SAMP server", type=discord.ActivityType.watching),
             tree_cls=QueryBotTree
