@@ -323,8 +323,7 @@ class Misc(commands.Cog):
                 commands.extend([cmd.qualified_name for cmd in command.walk_commands()]) 
                 continue
 
-            if command:
-                commands.append(command.name)
+            commands.append(command.name)
 
         if not current: # User didn't type anything, so show all the commands
             return [
