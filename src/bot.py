@@ -121,7 +121,6 @@ class QueryBot(commands.Bot):
     def __init__(self) -> None:
         self.query = query.Query(self)
         self._extensions = [m.name for m in iter_modules(['modules'], prefix='modules.')]
-        self._extensions.append("jishaku") # For debugging purposes
         self._status = status.Status(self)
         self.rcon_logged: Dict[int, Dict[int, Client]] = {}
         self.server_data: Dict[int, ServerData] = {} # Server info per guild
